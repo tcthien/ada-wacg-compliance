@@ -1,0 +1,54 @@
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+build
+.next
+out
+.turbo
+
+# Test & Coverage
+coverage
+.nyc_output
+test-results
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Playwright
+playwright-report
+playwright/.cache
+
+# OS
+Thumbs.db
+*.tmp
+*.temp
+
+# Misc
+*.tsbuildinfo
+.eslintcache
+.cache

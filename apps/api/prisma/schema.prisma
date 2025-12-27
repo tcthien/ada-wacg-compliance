@@ -1,0 +1,156 @@
+// This is your Prisma schema file for ADAShield API
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum WcagLevel {
+  A
+  AA
+  AAA
+}
+
+enum IssueImpact {
+  CRITICAL
+  SERIOUS
+  MODERATE
+  MINOR
+}
+
+enum ReportFormat {
+  PDF
+  JSON
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+/// Guest session for anonymous scan requests
+/// Includes anonymizedAt field for GDPR compliance
+model GuestSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  fingerprint  String    @db.VarChar(255)
+  sessionToken String    @unique @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @db.Timestamptz
+  expiresAt    DateTime  @db.Timestamptz
+  anonymizedAt DateTime? @db.Timestamptz
+
+  // Relations
+  scans Scan[]
+
+  // Indexes for performance
+  @@index([fingerprint])
+  @@index([expiresAt])
+  @@index([sessionToken])
+  @@map("guest_sessions")
+}
+
+/// WCAG compliance scan entity
+model Scan {
+  id             String     @id @default(uuid()) @db.Uuid
+  guestSessionId String?    @db.Uuid
+  userId         String?    @db.Uuid
+  url            String     @db.VarChar(2048)
+  email          String?    @db.VarChar(255)
+  status         ScanStatus @default(PENDING)
+  wcagLevel      WcagLevel  @default(AA)
+  durationMs     Int?
+  errorMessage   String?    @db.Text
+  createdAt      DateTime   @default(now()) @db.Timestamptz
+  completedAt    DateTime?  @db.Timestamptz
+
+  // Relations
+  guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+  scanResult   ScanResult?
+  reports      Report[]
+
+  // Indexes for performance
+  @@index([guestSessionId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+  @@map("scans")
+}
+
+/// Summary statistics for a completed scan
+model ScanResult {
+  id                 String   @id @default(uuid()) @db.Uuid
+  scanId             String   @unique @db.Uuid
+  totalIssues        Int      @default(0)
+  criticalCount      Int      @default(0)
+  seriousCount       Int      @default(0)
+  moderateCount      Int      @default(0)
+  minorCount         Int      @default(0)
+  passedChecks       Int      @default(0)
+  inapplicableChecks Int      @default(0)
+  createdAt          DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  scan   Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  issues Issue[]
+
+  @@index([scanId])
+  @@map("scan_results")
+}
+
+/// Individual accessibility issue detected during scan
+model Issue {
+  id           String      @id @default(uuid()) @db.Uuid
+  scanResultId String      @db.Uuid
+  ruleId       String      @db.VarChar(100)
+  wcagCriteria String[]    @db.VarChar(20)
+  impact       IssueImpact
+  description  String      @db.Text
+  helpText     String      @db.Text
+  helpUrl      String      @db.VarChar(2048)
+  htmlSnippet  String      @db.Text
+  cssSelector  String      @db.VarChar(1024)
+  nodes        Json // Stores IssueNode[] as JSON
+  createdAt    DateTime    @default(now()) @db.Timestamptz
+
+  // Relations
+  scanResult ScanResult @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance
+  @@index([scanResultId])
+  @@index([ruleId])
+  @@index([impact])
+  @@map("issues")
+}
+
+/// Generated report for a completed scan
+model Report {
+  id            String       @id @default(uuid()) @db.Uuid
+  scanId        String       @db.Uuid
+  format        ReportFormat
+  storageKey    String       @db.VarChar(512)
+  storageUrl    String       @db.VarChar(2048)
+  fileSizeBytes Int
+  createdAt     DateTime     @default(now()) @db.Timestamptz
+  expiresAt     DateTime     @db.Timestamptz
+
+  // Relations
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance
+  @@index([scanId])
+  @@index([expiresAt])
+  @@map("reports")
+}

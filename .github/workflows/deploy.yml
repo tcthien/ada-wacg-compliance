@@ -1,0 +1,233 @@
+name: Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      version:
+        description: 'Version tag to deploy (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9.0.0'
+  REGISTRY: ghcr.io
+
+jobs:
+  # ==============================================
+  # Build and Push Docker Images
+  # ==============================================
+  build:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        app: [api, worker, web]
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.version || github.ref }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=${{ github.event.inputs.version }}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Deploying version: ${VERSION}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.app }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            VCS_REF=${{ github.sha }}
+
+  # ==============================================
+  # Deploy to Staging
+  # ==============================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
+      (github.event_name == 'release' && contains(github.event.release.tag_name, 'rc'))
+    environment:
+      name: staging
+      url: https://staging.adashield.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying version ${{ needs.build.outputs.version }} to staging"
+          echo "This step would typically:"
+          echo "  1. Update Kubernetes/Docker Swarm configurations"
+          echo "  2. Apply database migrations"
+          echo "  3. Deploy new container images"
+          echo "  4. Run smoke tests"
+          echo ""
+          echo "Example deployment commands:"
+          echo "  kubectl set image deployment/api api=${{ env.REGISTRY }}/${{ github.repository }}/api:${{ needs.build.outputs.version }}"
+          echo "  kubectl set image deployment/worker worker=${{ env.REGISTRY }}/${{ github.repository }}/worker:${{ needs.build.outputs.version }}"
+          echo "  kubectl set image deployment/web web=${{ env.REGISTRY }}/${{ github.repository }}/web:${{ needs.build.outputs.version }}"
+
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running smoke tests against staging environment"
+          # Add your smoke test commands here
+          # Example: curl -f https://staging.adashield.com/api/v1/health
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "📢 Staging deployment ${{ job.status }}"
+          # Add notification logic here (Slack, email, etc.)
+
+  # ==============================================
+  # Deploy to Production
+  # ==============================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production') ||
+      (github.event_name == 'release' && !contains(github.event.release.tag_name, 'rc'))
+    environment:
+      name: production
+      url: https://adashield.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate production readiness
+        run: |
+          echo "✅ Validating production deployment prerequisites"
+          echo "  - Version: ${{ needs.build.outputs.version }}"
+          echo "  - Container registry: ${{ env.REGISTRY }}/${{ github.repository }}"
+          echo "  - Deployment strategy: Rolling update"
+
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying version ${{ needs.build.outputs.version }} to production"
+          echo "This step would typically:"
+          echo "  1. Create database backup"
+          echo "  2. Run database migrations"
+          echo "  3. Deploy new container images with rolling update strategy"
+          echo "  4. Monitor deployment health"
+          echo "  5. Run comprehensive smoke tests"
+          echo ""
+          echo "Example deployment commands:"
+          echo "  kubectl set image deployment/api api=${{ env.REGISTRY }}/${{ github.repository }}/api:${{ needs.build.outputs.version }}"
+          echo "  kubectl rollout status deployment/api"
+          echo "  kubectl set image deployment/worker worker=${{ env.REGISTRY }}/${{ github.repository }}/worker:${{ needs.build.outputs.version }}"
+          echo "  kubectl rollout status deployment/worker"
+          echo "  kubectl set image deployment/web web=${{ env.REGISTRY }}/${{ github.repository }}/web:${{ needs.build.outputs.version }}"
+          echo "  kubectl rollout status deployment/web"
+
+      - name: Run production smoke tests
+        run: |
+          echo "🧪 Running production smoke tests"
+          # Add your production smoke test commands here
+          # Example: curl -f https://adashield.com/api/v1/health
+
+      - name: Monitor deployment
+        run: |
+          echo "📊 Monitoring production deployment health"
+          # Add monitoring checks here
+          # Example: Check error rates, response times, etc.
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "📢 Production deployment ${{ job.status }}"
+          # Add notification logic here (Slack, email, PagerDuty, etc.)
+
+  # ==============================================
+  # Rollback (Manual Trigger Only)
+  # ==============================================
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: failure() && github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Rollback deployment
+        run: |
+          echo "⚠️ Deployment failed - initiating rollback"
+          echo "Rolling back to previous version"
+          # Add rollback commands here
+          # Example: kubectl rollout undo deployment/api
+
+      - name: Verify rollback
+        run: |
+          echo "✅ Verifying rollback success"
+          # Add verification commands here
+
+      - name: Notify rollback
+        if: always()
+        run: |
+          echo "📢 Rollback completed with status: ${{ job.status }}"
+          # Add notification logic here

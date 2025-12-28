@@ -5,8 +5,9 @@
  * Used by Fastify routes for request/response validation and route registration.
  */
 
-// Export controller
+// Export controllers
 export { registerScanRoutes } from './scan.controller.js';
+export { registerScanEventRoutes } from './scan-event.controller.js';
 
 // Export service functions
 export {
@@ -19,6 +20,15 @@ export {
   type ScanResultResponse as ScanResultServiceResponse,
 } from './scan.service.js';
 
+// Export scan event service
+export {
+  logEvent,
+  getEvents,
+  getEventsSince,
+  archiveOldEvents,
+  ScanEventServiceError,
+} from './scan-event.service.js';
+
 // Export all schemas
 export {
   WcagLevelSchema,
@@ -29,6 +39,16 @@ export {
   ScanStatusResponseSchema,
   ScanIdParamSchema,
 } from './scan.schema.js';
+
+// Export scan event schemas
+export {
+  scanEventTypeSchema,
+  logLevelSchema,
+  createScanEventSchema,
+  getEventsQuerySchema,
+  scanEventResponseSchema,
+  getEventsResponseSchema,
+} from './scan-event.schema.js';
 
 // Export all types
 export type {
@@ -50,3 +70,13 @@ export {
   isScanStatus,
   isIssueImpact,
 } from './scan.types.js';
+
+// Export scan event types
+export type {
+  ScanEventType,
+  LogLevel,
+  CreateScanEventInput,
+  GetEventsOptions,
+  GetEventsResponse,
+  EventSummary,
+} from './scan-event.types.js';

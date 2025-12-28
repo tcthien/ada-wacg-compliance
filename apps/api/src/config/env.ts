@@ -13,11 +13,11 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
-  PORT: z.coerce.number().int().positive().default(3001),
+  PORT: z.coerce.number().int().positive().default(3080),
   HOST: z.string().default('0.0.0.0'),
 
   // CORS Configuration
-  CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
   // Logging
   LOG_LEVEL: z

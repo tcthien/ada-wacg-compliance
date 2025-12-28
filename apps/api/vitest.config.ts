@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import { loadEnv } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -7,8 +6,6 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules', 'dist', '.turbo'],
-    env: loadEnv('test', process.cwd(), ''),
-    setupFiles: ['./src/tests/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

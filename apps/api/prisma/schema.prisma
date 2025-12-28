@@ -38,6 +38,29 @@ enum ReportFormat {
   JSON
 }
 
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ScanEventType {
+  INIT
+  QUEUE
+  FETCH
+  ANALYSIS
+  RESULT
+  ERROR
+  DEBUG
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
 // ============================================================================
 // MODELS
 // ============================================================================
@@ -73,19 +96,28 @@ model Scan {
   wcagLevel      WcagLevel  @default(AA)
   durationMs     Int?
   errorMessage   String?    @db.Text
+  eventSummary   Json?      // Archived event summary after cleanup
   createdAt      DateTime   @default(now()) @db.Timestamptz
+  updatedAt      DateTime   @updatedAt @db.Timestamptz
   completedAt    DateTime?  @db.Timestamptz
 
   // Relations
   guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
   scanResult   ScanResult?
   reports      Report[]
+  events       ScanEvent[]
 
   // Indexes for performance
   @@index([guestSessionId])
   @@index([status])
   @@index([createdAt])
   @@index([email])
+  // Compound indexes for admin queries (Task 3)
+  @@index([status, createdAt])
+  @@index([email, createdAt])
+  @@index([url])
+  // Index for cleanup queries
+  @@index([status, updatedAt])
   @@map("scans")
 }
 
@@ -153,4 +185,75 @@ model Report {
   @@index([scanId])
   @@index([expiresAt])
   @@map("reports")
+}
+
+/// Admin user for system management
+model AdminUser {
+  id                 String      @id @default(uuid()) @db.Uuid
+  email              String      @unique @db.VarChar(255)
+  passwordHash       String      @db.VarChar(255)
+  role               AdminRole   @default(ADMIN)
+  isActive           Boolean     @default(true)
+  mustChangePassword Boolean     @default(false)
+  lastLoginAt        DateTime?   @db.Timestamptz
+  createdAt          DateTime    @default(now()) @db.Timestamptz
+  updatedAt          DateTime    @updatedAt @db.Timestamptz
+  createdById        String?     @db.Uuid
+
+  // Self-referential relation for tracking who created the admin
+  createdBy     AdminUser?  @relation("AdminCreator", fields: [createdById], references: [id])
+  createdAdmins AdminUser[] @relation("AdminCreator")
+
+  // Relation to audit logs
+  auditLogs AuditLog[]
+
+  // Indexes for performance
+  @@index([email])
+  @@index([isActive])
+  @@map("admin_users")
+}
+
+/// Audit log for tracking admin actions
+/// Added in Task 2 - placeholder for relation
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  adminId    String   @db.Uuid
+  action     String   @db.VarChar(50)
+  targetId   String?  @db.Uuid
+  targetType String?  @db.VarChar(50)
+  details    Json     @default("{}")
+  ipAddress  String   @db.VarChar(45)
+  userAgent  String   @db.Text
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  admin AdminUser @relation(fields: [adminId], references: [id])
+
+  // Indexes for performance
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+/// Real-time scan event for console logging
+/// Stores step-by-step progress during accessibility scans
+model ScanEvent {
+  id        String        @id @default(uuid()) @db.Uuid
+  scanId    String        @db.Uuid
+  type      ScanEventType
+  level     LogLevel      @default(INFO)
+  message   String        @db.VarChar(500)
+  metadata  Json?
+  adminOnly Boolean       @default(false)
+  createdAt DateTime      @default(now()) @db.Timestamptz
+
+  // Relations
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance - optimized for polling queries
+  @@index([scanId, createdAt])
+  @@index([createdAt])
+  @@map("scan_events")
 }

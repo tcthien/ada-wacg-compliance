@@ -7,6 +7,12 @@ import { checkRedisHealth, closeRedisConnection } from './config/redis.js';
 import { registerSessionRoutes } from './modules/sessions/session.controller.js';
 import { registerReportRoutes } from './modules/reports/report.controller.js';
 import { registerScanRoutes } from './modules/scans/scan.controller.js';
+import { registerScanEventRoutes } from './modules/scans/scan-event.controller.js';
+import { registerAdminRoutes } from './modules/admin/index.js';
+import {
+  startCleanupScheduler,
+  stopCleanupScheduler,
+} from './jobs/cleanup-scan-events.job.js';
 
 /**
  * ADAShield API Server
@@ -87,7 +93,9 @@ async function buildServer() {
   // Register module routes
   await registerSessionRoutes(server, env.API_PREFIX);
   await registerScanRoutes(server, env.API_PREFIX);
+  await registerScanEventRoutes(server, env.API_PREFIX);
   await registerReportRoutes(server, env.API_PREFIX);
+  await registerAdminRoutes(server, env.API_PREFIX);
 
   return server;
 }
@@ -103,6 +111,9 @@ async function start() {
       port: env.PORT,
       host: env.HOST,
     });
+
+    // Start scheduled jobs
+    startCleanupScheduler();
 
     console.log(`
 🚀 ADAShield API Server started successfully!
@@ -123,12 +134,14 @@ async function start() {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n👋 Shutting down gracefully...');
+  stopCleanupScheduler();
   await closeRedisConnection();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('\n👋 Shutting down gracefully...');
+  stopCleanupScheduler();
   await closeRedisConnection();
   process.exit(0);
 });

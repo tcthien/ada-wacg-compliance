@@ -3,14 +3,14 @@
  */
 
 export const env = {
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
-  recaptchaSiteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '',
+  apiUrl: process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3080',
+  recaptchaSiteKey: process.env['NEXT_PUBLIC_RECAPTCHA_SITE_KEY'] || '',
 } as const;
 
 // Validation
 if (typeof window !== 'undefined') {
   if (!env.apiUrl) {
-    console.warn('NEXT_PUBLIC_API_URL is not set, using default: http://localhost:3000');
+    console.warn('NEXT_PUBLIC_API_URL is not set, using default: http://localhost:3001');
   }
 
   if (!env.recaptchaSiteKey) {

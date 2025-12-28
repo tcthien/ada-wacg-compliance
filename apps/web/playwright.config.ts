@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
  */
 
 // Get base URL from environment or use default
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001';
+const baseURL = process.env['PLAYWRIGHT_BASE_URL'] || 'http://localhost:3001';
 
 export default defineConfig({
   // Test directory
@@ -29,19 +29,19 @@ export default defineConfig({
   fullyParallel: true,
 
   // Fail the build on CI if you accidentally left test.only in the source code
-  forbidOnly: !!process.env.CI,
+  forbidOnly: !!process.env['CI'],
 
   // Retry on CI only
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env['CI'] ? 2 : 0,
 
   // Opt out of parallel tests on CI
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env['CI'] ? 1 : 4,
 
   // Reporter to use
   reporter: [
     ['html', { open: 'never' }],
     ['list'],
-    ...(process.env.CI ? [['github'] as const] : []),
+    ...(process.env['CI'] ? [['github'] as const] : []),
   ],
 
   // Shared settings for all the projects below

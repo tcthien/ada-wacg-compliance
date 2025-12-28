@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useScan } from '@/hooks/useScan';
 import { ScanProgress } from './ScanProgress';
+import { ScanConsole } from './ScanConsole';
 
 interface ScanStatusProps {
   scanId: string;
@@ -13,6 +14,7 @@ interface ScanStatusProps {
 export function ScanStatus({ scanId, onComplete }: ScanStatusProps) {
   const router = useRouter();
   const { scan, loading, error } = useScan(scanId, { pollInterval: 2000 });
+  const [isConsoleExpanded, setIsConsoleExpanded] = useState(true);
 
   useEffect(() => {
     if (scan?.status === 'COMPLETED') {
@@ -92,17 +94,26 @@ export function ScanStatus({ scanId, onComplete }: ScanStatusProps) {
   const stageText = currentStage.text;
 
   return (
-    <div className="max-w-md mx-auto py-8">
+    <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="text-center mb-6">
         <div className="animate-pulse text-4xl mb-2">🔍</div>
         <h2 className="text-xl font-semibold">Scanning...</h2>
         <p className="text-muted-foreground text-sm mt-1">Scan ID: {scanId}</p>
       </div>
 
-      <ScanProgress
-        progress={currentStage.progress}
-        stage={stageText}
-        estimatedTimeRemaining={undefined} // Could be calculated based on queue position
+      <div className="max-w-md mx-auto mb-6">
+        <ScanProgress
+          progress={currentStage.progress}
+          stage={stageText}
+        />
+      </div>
+
+      {/* Scan Console */}
+      <ScanConsole
+        scanId={scanId}
+        scanStatus={scan.status}
+        isExpanded={isConsoleExpanded}
+        onToggle={() => setIsConsoleExpanded(!isConsoleExpanded)}
       />
     </div>
   );

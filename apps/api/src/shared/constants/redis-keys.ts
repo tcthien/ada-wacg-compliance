@@ -82,6 +82,18 @@ export const RedisKeys = {
   },
 
   /**
+   * Scan events cache for console logging
+   * Pattern: scan:{scanId}:events
+   * TTL: 24 hours
+   * Usage: Cache real-time scan events for console display
+   */
+  SCAN_EVENTS: {
+    pattern: 'scan:events',
+    build: (scanId: string) => `scan:${scanId}:events`,
+    ttl: 86400, // 24 hours
+  },
+
+  /**
    * User scan history
    * Pattern: user:{userId}:scans
    * TTL: 30 days
@@ -102,6 +114,84 @@ export const RedisKeys = {
   CACHE: {
     pattern: 'cache',
     build: (endpoint: string, paramsHash: string) => `cache:${endpoint}:${paramsHash}`,
+    ttl: 300, // 5 minutes
+  },
+} as const;
+
+/**
+ * Admin-specific Redis key patterns
+ * Used for admin authentication, dashboard caching, and rate limiting
+ */
+export const AdminRedisKeys = {
+  /**
+   * JWT token blacklist for logged out tokens
+   * Pattern: admin:blacklist:{tokenId}
+   * TTL: 24 hours (matches JWT expiration)
+   * Usage: Track invalidated admin JWT tokens to prevent reuse
+   */
+  JWT_BLACKLIST: {
+    pattern: 'admin:blacklist',
+    build: (tokenId: string) => `admin:blacklist:${tokenId}`,
+    ttl: 86400, // 24 hours - matches JWT expiration
+  },
+
+  /**
+   * Dashboard metrics cache
+   * Pattern: admin:dashboard:metrics
+   * TTL: 5 minutes (per NFR-Performance requirement)
+   * Usage: Cache aggregated dashboard statistics
+   */
+  DASHBOARD_METRICS: {
+    pattern: 'admin:dashboard:metrics',
+    build: () => 'admin:dashboard:metrics',
+    ttl: 300, // 5 minutes
+  },
+
+  /**
+   * Dashboard trends cache
+   * Pattern: admin:dashboard:trends:{days}
+   * TTL: 5 minutes
+   * Usage: Cache historical trend data for charts
+   */
+  DASHBOARD_TRENDS: {
+    pattern: 'admin:dashboard:trends',
+    build: (days: number) => `admin:dashboard:trends:${days}`,
+    ttl: 300, // 5 minutes
+  },
+
+  /**
+   * Login attempt counter for rate limiting
+   * Pattern: admin:login_attempts:{ip}
+   * TTL: 15 minutes (rate limit window)
+   * Usage: Track failed login attempts per IP address
+   */
+  LOGIN_ATTEMPTS: {
+    pattern: 'admin:login_attempts',
+    build: (ip: string) => `admin:login_attempts:${ip}`,
+    ttl: 900, // 15 minutes - rate limit window
+  },
+
+  /**
+   * Issue distribution cache
+   * Pattern: admin:dashboard:issue_distribution
+   * TTL: 5 minutes
+   * Usage: Cache issue counts by severity (critical, serious, moderate, minor)
+   */
+  ISSUE_DISTRIBUTION: {
+    pattern: 'admin:dashboard:issue_distribution',
+    build: () => 'admin:dashboard:issue_distribution',
+    ttl: 300, // 5 minutes
+  },
+
+  /**
+   * Top domains cache
+   * Pattern: admin:dashboard:top_domains:{limit}
+   * TTL: 5 minutes
+   * Usage: Cache top scanned domains with scan counts
+   */
+  TOP_DOMAINS: {
+    pattern: 'admin:dashboard:top_domains',
+    build: (limit: number) => `admin:dashboard:top_domains:${limit}`,
     ttl: 300, // 5 minutes
   },
 } as const;

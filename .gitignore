@@ -29,11 +29,16 @@ test-results
 
 # Logs
 logs
+.logs
 *.log
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Dev scripts
+.api.pid
+.web.pid
 
 # Prisma
 prisma/*.db

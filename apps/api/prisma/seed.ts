@@ -1,6 +1,7 @@
-import { PrismaClient, ScanStatus, WcagLevel, IssueImpact, ReportFormat } from '@prisma/client';
+import { PrismaClient, ScanStatus, WcagLevel, IssueImpact, ReportFormat, AdminRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+import bcrypt from 'bcrypt';
 
 // Prisma 7.x requires explicit adapter configuration
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL! });
@@ -12,11 +13,41 @@ async function main() {
 
   // Clean existing data
   console.log('🧹 Cleaning existing data...');
+  await prisma.auditLog.deleteMany();
+  await prisma.adminUser.deleteMany();
   await prisma.report.deleteMany();
   await prisma.issue.deleteMany();
   await prisma.scanResult.deleteMany();
   await prisma.scan.deleteMany();
   await prisma.guestSession.deleteMany();
+
+  // Create Admin Users
+  console.log('👑 Creating admin users...');
+  const adminPassword = await bcrypt.hash('admin123', 10);
+  const superAdminPassword = await bcrypt.hash('superadmin123', 10);
+
+  const superAdmin = await prisma.adminUser.create({
+    data: {
+      email: 'superadmin@adashield.dev',
+      passwordHash: superAdminPassword,
+      role: AdminRole.SUPER_ADMIN,
+      isActive: true,
+      mustChangePassword: false,
+    },
+  });
+
+  await prisma.adminUser.create({
+    data: {
+      email: 'admin@adashield.dev',
+      passwordHash: adminPassword,
+      role: AdminRole.ADMIN,
+      isActive: true,
+      mustChangePassword: false,
+      createdById: superAdmin.id,
+    },
+  });
+
+  console.log('✅ Created 2 admin users');
 
   // Create GuestSessions
   console.log('👤 Creating guest sessions...');
@@ -322,11 +353,15 @@ async function main() {
 
   console.log('✨ Seed completed successfully!');
   console.log('\nSummary:');
+  console.log('- 2 Admin Users (SUPER_ADMIN, ADMIN)');
   console.log('- 3 Guest Sessions (active, expired, anonymized)');
   console.log('- 5 Scans (PENDING, RUNNING, COMPLETED x2, FAILED)');
   console.log('- 2 Scan Results');
   console.log('- 8 Issues (various impacts and WCAG criteria)');
   console.log('- 2 Reports (PDF, JSON)');
+  console.log('\n📧 Admin Credentials:');
+  console.log('  Super Admin: superadmin@adashield.dev / superadmin123');
+  console.log('  Admin: admin@adashield.dev / admin123');
 }
 
 main()

@@ -1,4 +1,5 @@
 import { env } from './env';
+import type { GetEventsResponse, GetEventsOptions } from '@/types/scan-event';
 
 /**
  * Type definitions for API requests and responses
@@ -207,6 +208,19 @@ export const api = {
       apiClient<ScanListResponse>(
         `/api/v1/scans${cursor ? `?cursor=${cursor}` : ''}`
       ),
+    getEvents: (scanId: string, options?: GetEventsOptions) => {
+      const params = new URLSearchParams();
+      if (options?.since) {
+        params.set('since', options.since);
+      }
+      if (options?.limit !== undefined) {
+        params.set('limit', options.limit.toString());
+      }
+      const queryString = params.toString();
+      return apiClient<GetEventsResponse>(
+        `/api/v1/scans/${scanId}/events${queryString ? `?${queryString}` : ''}`
+      );
+    },
   },
   reports: {
     get: (scanId: string, format: 'pdf' | 'json') =>

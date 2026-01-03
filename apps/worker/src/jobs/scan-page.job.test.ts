@@ -76,6 +76,16 @@ vi.mock('../utils/progress-tracker.js', async () => {
   };
 });
 
+// Mock batch status service
+const mockNotifyScanComplete = vi.fn();
+
+vi.mock('../services/batch-status.service.js', () => ({
+  batchStatusService: {
+    notifyScanComplete: (...args: unknown[]) =>
+      mockNotifyScanComplete(...args),
+  },
+}));
+
 // ============================================================================
 // Test Data
 // ============================================================================
@@ -147,6 +157,8 @@ describe('processScanPageJob', () => {
     mockPrismaUpdate.mockResolvedValue({});
     mockPrismaCreate.mockResolvedValue({});
     mockUpdateScanProgress.mockResolvedValue(undefined);
+    // By default, scans don't belong to a batch (return null)
+    mockNotifyScanComplete.mockResolvedValue(null);
   });
 
   afterEach(() => {

@@ -183,7 +183,18 @@ export type AuditAction =
   | 'CHANGE_PASSWORD'
   | 'DELETE_SCAN'
   | 'RETRY_SCAN'
-  | 'EXPORT_DATA';
+  | 'EXPORT_DATA'
+  | 'BATCH_LIST_VIEW'
+  | 'BATCH_DETAIL_VIEW'
+  | 'BATCH_CANCELLED'
+  | 'BATCH_DELETED'
+  | 'BATCH_EXPORTED'
+  | 'BATCH_RETRY'
+  | 'CANCEL_BATCH'
+  | 'DELETE_BATCH'
+  | 'RETRY_BATCH'
+  | 'BATCH_EXPORT_REQUESTED'
+  | 'BATCH_EXPORT_STATUS_CHECK';
 
 /**
  * Audit log details (stored as JSON in database)

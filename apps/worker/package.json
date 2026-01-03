@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@adashield/core": "workspace:*",
+    "@aws-sdk/client-ses": "^3.700.0",
     "@axe-core/playwright": "^4.10.1",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
@@ -26,15 +27,18 @@
     "dotenv": "^16.0.0",
     "ioredis": "^5.8.2",
     "isomorphic-dompurify": "^2.22.0",
-    "nodemailer": "^6.9.16",
+    "js-yaml": "^4.1.0",
+    "minimatch": "^9.0.0",
+    "nodemailer": "^6.10.1",
     "pdfkit": "^0.16.0",
     "pg": "^8.16.3",
     "playwright": "^1.49.1",
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
-    "@types/nodemailer": "^6.4.17",
+    "@types/nodemailer": "^6.4.21",
     "@types/pdfkit": "^0.13.8",
     "@types/pg": "^8.16.0",
     "@vitest/coverage-v8": "^4.0.16",

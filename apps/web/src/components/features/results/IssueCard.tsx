@@ -1,29 +1,63 @@
 'use client';
 
-import { useState } from 'react';
 import type { Issue } from './IssueList';
 import { IssueCode } from './IssueCode';
+import { AiIssueEnhancement } from '../ai/AiIssueEnhancement';
+import type { AiIssueData } from '../ai/AiIssueEnhancement';
+import { CopyButton } from '@/components/ui/copy-button';
+import { useAnalyticsContext } from '@/components/features/analytics';
+import type { IssueListInteractionEvent, ClipboardCopyEvent } from '@/lib/analytics.types';
+import { getSeverityColors } from '@/lib/severity-colors';
 
 interface IssueCardProps {
   issue: Issue;
+  /** AI enhancement data for this issue (if available) */
+  aiData?: AiIssueData | null;
+  /** Whether AI analysis is still loading */
+  aiLoading?: boolean;
+  /** Whether the card is expanded (controlled from store) */
+  expanded?: boolean;
+  /** Callback when toggle expand is clicked (controlled from store) */
+  onToggleExpand?: () => void;
 }
 
-export function IssueCard({ issue }: IssueCardProps) {
-  const [expanded, setExpanded] = useState(false);
+export function IssueCard({ issue, aiData, aiLoading = false, expanded = false, onToggleExpand }: IssueCardProps) {
+  const { track } = useAnalyticsContext();
 
-  const impactColors = {
-    critical: 'border-l-red-500',
-    serious: 'border-l-orange-500',
-    moderate: 'border-l-yellow-500',
-    minor: 'border-l-blue-500',
+  // Helper to get session ID
+  const getSessionId = () =>
+    typeof window !== 'undefined' ? window.sessionStorage.getItem('sessionId') || '' : '';
+
+  // Handle toggle expand with analytics
+  const handleToggleExpand = () => {
+    // Track card expand/collapse event
+    const event: IssueListInteractionEvent = {
+      event: expanded ? 'issue_card_collapsed' : 'issue_card_expanded',
+      issue_count: 1,
+      issue_id: issue.id,
+      timestamp: new Date().toISOString(),
+      sessionId: getSessionId(),
+    };
+    track(event);
+
+    // Call parent toggle handler
+    onToggleExpand?.();
   };
 
-  const impactBadgeColors = {
-    critical: 'bg-red-100 text-red-800 border-red-200',
-    serious: 'bg-orange-100 text-orange-800 border-orange-200',
-    moderate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    minor: 'bg-blue-100 text-blue-800 border-blue-200',
+  const handleCopyFixExample = () => {
+    // Track code copy event
+    const event: ClipboardCopyEvent = {
+      event: 'code_snippet_copied',
+      copy_target: 'code_snippet',
+      success: true,
+      timestamp: new Date().toISOString(),
+      sessionId: getSessionId(),
+    };
+    track(event);
   };
+
+  // Get severity colors from centralized system
+  const severityColors = getSeverityColors(issue.impact);
 
   // Extract WCAG criteria from tags
   const wcagCriteria = issue.tags.filter((tag) => tag.startsWith('wcag'));
@@ -33,19 +67,17 @@ export function IssueCard({ issue }: IssueCardProps) {
 
   return (
     <div
-      className={`border rounded-lg border-l-4 ${impactColors[issue.impact]} bg-card`}
+      className={`border rounded-lg border-l-4 ${severityColors.border.replace('border-', 'border-l-')} bg-card`}
     >
       <button
         className="w-full p-4 text-left flex justify-between items-start hover:bg-accent/50 transition-colors"
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggleExpand}
         aria-expanded={expanded}
       >
         <div className="flex-1">
           <div className="flex items-start gap-3 mb-2">
             <span
-              className={`inline-block px-2 py-1 rounded text-xs font-medium border ${
-                impactBadgeColors[issue.impact]
-              }`}
+              className={`inline-block px-2 py-1 rounded text-xs font-medium border ${severityColors.bg} ${severityColors.text} ${severityColors.border}`}
             >
               {issue.impact.toUpperCase()}
             </span>
@@ -106,15 +138,38 @@ export function IssueCard({ issue }: IssueCardProps) {
               )}
               {fixGuide.codeExample && (
                 <div className="mt-3">
-                  <p className="text-xs font-medium mb-1 text-green-900 dark:text-green-100">
-                    Example:
-                  </p>
-                  <pre className="p-3 bg-gray-100 dark:bg-gray-900 rounded text-xs overflow-x-auto">
-                    <code>{fixGuide.codeExample}</code>
-                  </pre>
+                  <div className="text-xs font-medium mb-1 text-green-900 dark:text-green-100 flex items-center justify-between">
+                    <span>Example:</span>
+                    <CopyButton
+                      text={fixGuide.codeExample}
+                      variant="icon"
+                      size="sm"
+                      onCopy={handleCopyFixExample}
+                      className="h-6 w-6"
+                    />
+                  </div>
+                  {/* Responsive code snippet with horizontal scroll and visual indicator */}
+                  <div className="relative">
+                    <pre className="p-3 bg-gray-100 dark:bg-gray-900 rounded text-xs overflow-x-auto max-w-full">
+                      <code>{fixGuide.codeExample}</code>
+                    </pre>
+                    {/* Visual scroll indicator for mobile - gradient fade on right edge */}
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-8
+                                 bg-gradient-to-l from-gray-100 to-transparent
+                                 dark:from-gray-900 dark:to-transparent
+                                 pointer-events-none md:hidden rounded-r"
+                      aria-hidden="true"
+                    />
+                  </div>
                 </div>
               )}
             </div>
+          )}
+
+          {/* AI Enhancement - Show when AI is enabled (loading or complete) */}
+          {(aiLoading || aiData) && (
+            <AiIssueEnhancement data={aiData} isLoading={aiLoading} />
           )}
 
           {/* Learn more link */}

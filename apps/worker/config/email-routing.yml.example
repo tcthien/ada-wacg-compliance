@@ -1,0 +1,57 @@
+# Email Routing Configuration
+# ============================
+#
+# This file configures email provider routing based on recipient email patterns.
+# Copy this file to 'email-routing.yml' and customize as needed.
+#
+# IMPORTANT: This file is used as a FALLBACK when environment variables
+# are not set for email routing (EMAIL_DEFAULT_PROVIDER, EMAIL_*_PATTERNS).
+#
+# Sensitive values (SENDGRID_API_KEY, SMTP_FROM, AWS_SES_REGION) are always
+# read from environment variables for security - never put them in this file.
+#
+# Pattern syntax:
+#   - Use '*' as wildcard for any characters
+#   - Patterns are matched against the full email address
+#   - Examples:
+#       "*@microsoft.com"   - Matches any email at microsoft.com
+#       "*@*.edu"           - Matches any .edu domain
+#       "admin@*"           - Matches admin@ at any domain
+#
+# Configuration priority:
+#   1. Environment variables (if EMAIL_DEFAULT_PROVIDER or EMAIL_*_PATTERNS set)
+#   2. This YAML file (if exists and valid)
+#   3. Default values
+
+email-routing:
+  # Default provider when no pattern matches
+  # Options: SENDGRID, SES
+  default-provider: SES
+
+  providers:
+    # SendGrid provider configuration
+    # Requires SENDGRID_API_KEY and SMTP_FROM environment variables
+    SENDGRID:
+      patterns:
+        # Route Microsoft domains through SendGrid (better deliverability)
+        - "*@microsoft.com"
+        - "*@outlook.com"
+        - "*@hotmail.com"
+        - "*@live.com"
+        # Add more patterns as needed
+        # - "*@enterprise-client.com"
+
+    # AWS SES provider configuration
+    # Requires SMTP_FROM environment variable
+    # AWS credentials via IAM role or environment variables (AWS_ACCESS_KEY_ID, etc.)
+    SES:
+      patterns:
+        # Route educational institutions through SES
+        - "*@*.edu"
+        - "*@*.edu.au"
+        - "*@*.ac.uk"
+        # Route government domains through SES
+        - "*@*.gov"
+        - "*@*.gov.uk"
+        # Add more patterns as needed
+        # - "*@internal-domain.com"

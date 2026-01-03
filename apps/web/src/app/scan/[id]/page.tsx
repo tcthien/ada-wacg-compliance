@@ -1,19 +1,27 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useScan } from '@/hooks/useScan';
 import { useScanResult } from '@/hooks/useScanResult';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { useAiScanStatus } from '@/hooks/useAiScanStatus';
+import { useReportStatus } from '@/hooks/useReportStatus';
 import { ScanProgress } from '@/components/features/scan/ScanProgress';
 import { ResultsSummary } from '@/components/features/results/ResultsSummary';
 import { IssueList, type Issue } from '@/components/features/results/IssueList';
 import { ExportButton } from '@/components/features/export/ExportButton';
+import { ReportArtifacts } from '@/components/features/export/ReportArtifacts';
+import { ShareButton } from '@/components/ui/share-button';
 import { CoverageDisclaimer } from '@/components/features/compliance/CoverageDisclaimer';
+import { AiStatusBadge } from '@/components/features/ai/AiStatusBadge';
+import { AiSummarySection } from '@/components/features/ai/AiSummarySection';
+import { PublicLayout } from '@/components/layouts/PublicLayout';
 import type { IssuesByImpact } from '@/lib/api';
 
 /**
  * Flatten issuesByImpact into a single array for the IssueList component
- * Converts API issue format to component-expected format
+ * Converts API issue format to component-expected format with AI data
  */
 function flattenIssues(issuesByImpact: IssuesByImpact): Issue[] {
   const allIssues: Issue[] = [];
@@ -31,6 +39,10 @@ function flattenIssues(issuesByImpact: IssuesByImpact): Issue[] {
         helpUrl: issue.helpUrl,
         tags: issue.wcagCriteria,
         nodes: issue.nodes,
+        // Include AI enhancement data if available (REQ-6 AC 3-4)
+        aiExplanation: issue.aiExplanation ?? null,
+        aiFixSuggestion: issue.aiFixSuggestion ?? null,
+        aiPriority: issue.aiPriority ?? null,
       });
     }
   }
@@ -42,6 +54,10 @@ export default function ScanResultPage() {
   const params = useParams();
   const router = useRouter();
   const scanId = params['id'] as string;
+  const { track } = useAnalytics();
+
+  // Ref to track if scan_completed has been tracked (prevent duplicates)
+  const scanCompletedTrackedRef = useRef(false);
 
   // Poll for scan status
   const { scan, loading: statusLoading, error: statusError } = useScan(scanId, {
@@ -57,12 +73,75 @@ export default function ScanResultPage() {
     enabled: scan?.status === 'COMPLETED',
   });
 
+  // Poll for AI status if AI is enabled
+  const { aiStatus } = useAiScanStatus(scanId, {
+    initialInterval: 30000, // 30 seconds
+    maxInterval: 120000, // 2 minutes
+  });
+
+  // Fetch report status to display available report artifacts (PDF/JSON)
+  const {
+    status: reportStatus,
+    isLoading: reportStatusLoading,
+  } = useReportStatus(scanId, {
+    enabled: scan?.status === 'COMPLETED',
+  });
+
   // Flatten issues from issuesByImpact for IssueList component
   // Must be called unconditionally (React hooks rule)
   const flattenedIssues = useMemo(
     () => (result?.issuesByImpact ? flattenIssues(result.issuesByImpact) : []),
     [result?.issuesByImpact]
   );
+
+  // Track funnel_scan_results_viewed on page load
+  useEffect(() => {
+    const funnelSessionId = sessionStorage.getItem('funnel_session_id');
+    if (funnelSessionId) {
+      track('funnel_scan_results_viewed', {
+        funnel_session_id: funnelSessionId,
+        timestamp: new Date().toISOString(),
+        sessionId: funnelSessionId,
+      });
+    }
+  }, [scanId, track]);
+
+  // Track scan_completed when scan transitions to COMPLETED status
+  useEffect(() => {
+    if (scan?.status === 'COMPLETED' && result && !scanCompletedTrackedRef.current) {
+      // Calculate scan duration if timestamps are available
+      let duration = 0;
+      if (scan.createdAt && result.completedAt) {
+        const startTime = new Date(scan.createdAt).getTime();
+        const endTime = new Date(result.completedAt).getTime();
+        duration = Math.round(endTime - startTime); // Duration in milliseconds
+      }
+
+      // Count issues by severity
+      const critical = result.issuesByImpact?.critical?.length || 0;
+      const serious = result.issuesByImpact?.serious?.length || 0;
+      const moderate = result.issuesByImpact?.moderate?.length || 0;
+      const minor = result.issuesByImpact?.minor?.length || 0;
+
+      // Track the scan_completed event
+      const funnelSessionId = sessionStorage.getItem('funnel_session_id') || scanId;
+      track('scan_completed', {
+        scan_duration_ms: duration,
+        issue_count: {
+          critical,
+          serious,
+          moderate,
+          minor,
+        },
+        wcag_level: result.wcagLevel,
+        timestamp: new Date().toISOString(),
+        sessionId: funnelSessionId,
+      });
+
+      // Mark as tracked to prevent duplicates
+      scanCompletedTrackedRef.current = true;
+    }
+  }, [scan, result, scanId, track]);
 
   // Loading state - initial fetch
   if (statusLoading && !scan) {
@@ -151,6 +230,9 @@ export default function ScanResultPage() {
   // Scanning in progress state
   if (scan.status === 'PENDING' || scan.status === 'RUNNING') {
     // Map status to user-friendly stages
+    // When AI is enabled and progress is high, show AI allocation message
+    const isAiPending = scan.aiEnabled && (scan.progress || 0) >= 90;
+
     const stageMap: Record<string, { text: string; progress: number }> = {
       PENDING: { text: 'Waiting in queue...', progress: 10 },
       RUNNING: { text: 'Scanning page...', progress: scan.progress || 50 },
@@ -176,6 +258,8 @@ export default function ScanResultPage() {
           <ScanProgress
             progress={currentStage.progress}
             stage={stageText}
+            aiPending={isAiPending || false}
+            aiNotificationEmail={scan.aiEnabled && scan.email ? scan.email : undefined}
           />
 
           <p className="text-center text-sm text-muted-foreground mt-6">
@@ -250,37 +334,80 @@ export default function ScanResultPage() {
 
     // Display full results
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">
-                  Accessibility Scan Results
-                </h1>
-                <p className="text-muted-foreground">
-                  <span className="font-medium">URL:</span>{' '}
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    {result.url}
-                  </a>
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Scanned on {new Date(result.completedAt).toLocaleString()} |
-                  WCAG {result.wcagLevel}
-                </p>
+      <PublicLayout
+        breadcrumbs={[
+          { label: 'Home', href: '/' },
+          { label: 'History', href: '/history' },
+          { label: 'Scan Results' },
+        ]}
+        showBackButton={true}
+        headerActions={
+          <>
+            <ExportButton scanId={scanId} />
+            <ShareButton resultType="scan" resultId={scanId} />
+          </>
+        }
+      >
+        <div className="bg-gray-50 py-8">
+          <div className="max-w-7xl mx-auto px-4">
+            {/* Page Title and Metadata */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold mb-2">
+                Accessibility Scan Results
+              </h1>
+              <p className="text-muted-foreground">
+                <span className="font-medium">URL:</span>{' '}
+                <a
+                  href={result.url.split('\n')[0]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline break-all"
+                >
+                  {result.url.split('\n')[0]}
+                </a>
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Scanned on {new Date(result.completedAt).toLocaleString()} |
+                WCAG {result.wcagLevel}
+              </p>
+
+              {/* Report Artifacts - show available PDF/JSON reports */}
+              {(reportStatus?.pdf || reportStatus?.json) && (
+                <div className="mt-4">
+                  <ReportArtifacts
+                    status={reportStatus}
+                    isLoading={reportStatusLoading}
+                    resourceId={scanId}
+                    resourceType="scan"
+                  />
+                </div>
+              )}
+
+              {/* AI Status Badge - Show if AI was enabled for this scan */}
+              {scan.aiEnabled && aiStatus && (
+                <div className="mt-3">
+                  <AiStatusBadge
+                    status={aiStatus.status}
+                    {...(scan.email ? { email: scan.email } : {})}
+                  />
+                </div>
+              )}
+
+              {/* Coverage Disclaimer */}
+              <div className="mt-4">
+                <CoverageDisclaimer />
               </div>
-              <ExportButton scanId={scanId} />
             </div>
 
-            {/* Coverage Disclaimer */}
-            <CoverageDisclaimer />
-          </div>
+          {/* AI Summary Section - Show when AI is completed */}
+          {scan.aiEnabled && aiStatus?.status === 'COMPLETED' && (
+            <div className="mb-8">
+              <AiSummarySection
+                aiSummary={aiStatus.summary ?? null}
+                aiRemediationPlan={aiStatus.remediationPlan ?? null}
+              />
+            </div>
+          )}
 
           {/* Results Summary */}
           <div className="mb-8">
@@ -294,7 +421,14 @@ export default function ScanResultPage() {
               Issues Found ({result.summary.totalIssues})
             </h2>
             {flattenedIssues.length > 0 ? (
-              <IssueList issues={flattenedIssues} />
+              <IssueList
+                issues={flattenedIssues}
+                aiLoading={
+                  !!(scan.aiEnabled &&
+                  aiStatus?.status &&
+                  ['PENDING', 'DOWNLOADED', 'PROCESSING'].includes(aiStatus.status))
+                }
+              />
             ) : (
               <div className="bg-white rounded-lg border p-8 text-center">
                 <div className="text-6xl mb-4">✅</div>
@@ -330,6 +464,7 @@ export default function ScanResultPage() {
           </div>
         </div>
       </div>
+      </PublicLayout>
     );
   }
 

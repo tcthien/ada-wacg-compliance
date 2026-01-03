@@ -11,7 +11,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 
 // Get base URL from environment or use default
-const baseURL = process.env['PLAYWRIGHT_BASE_URL'] || 'http://localhost:3001';
+// Note: Web app runs on port 3000, API runs on port 3080
+const baseURL = process.env['PLAYWRIGHT_BASE_URL'] || 'http://localhost:3000';
 
 export default defineConfig({
   // Test directory

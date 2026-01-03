@@ -647,6 +647,144 @@ export const dashboardDomainsQuerySchema = z.object({
 });
 
 /**
+ * Schema for batch status enum values
+ * Matches the BatchStatus enum from Prisma schema
+ */
+export const BatchStatusSchema = z.enum(
+  ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'STALE'],
+  {
+    errorMap: () => ({
+      message: 'Status must be PENDING, RUNNING, COMPLETED, FAILED, CANCELLED, or STALE',
+    }),
+  }
+);
+
+/**
+ * Schema for batch list query parameters
+ *
+ * Used for filtering and paginating batches in the admin panel
+ * All filters are optional and can be combined
+ *
+ * @example
+ * ```ts
+ * const query = {
+ *   status: 'COMPLETED',
+ *   startDate: '2025-01-01T00:00:00Z',
+ *   endDate: '2025-12-31T23:59:59Z',
+ *   homepageUrl: 'https://example.com',
+ *   sessionId: '550e8400-e29b-41d4-a716-446655440000',
+ *   page: '1',
+ *   limit: '20'
+ * };
+ * batchListQuerySchema.parse(query);
+ * ```
+ */
+export const batchListQuerySchema = z.object({
+  /**
+   * Page number (1-indexed)
+   * Defaults to 1 if not provided
+   */
+  page: z.coerce
+    .number({
+      invalid_type_error: 'Page must be a number',
+    })
+    .int('Page must be an integer')
+    .positive('Page must be positive')
+    .default(1),
+
+  /**
+   * Number of items per page
+   * Defaults to 20 if not provided
+   * Maximum of 100 to prevent excessive data transfer
+   */
+  limit: z.coerce
+    .number({
+      invalid_type_error: 'Limit must be a number',
+    })
+    .int('Limit must be an integer')
+    .positive('Limit must be positive')
+    .max(100, 'Limit cannot exceed 100')
+    .default(20),
+
+  /**
+   * Filter by batch status
+   * Optional - defaults to showing all statuses
+   */
+  status: BatchStatusSchema.optional(),
+
+  /**
+   * Filter by date range - start date (inclusive)
+   * Optional - ISO 8601 datetime string
+   */
+  startDate: z.string().datetime({
+    message: 'Start date must be a valid ISO 8601 datetime',
+  }).optional(),
+
+  /**
+   * Filter by date range - end date (inclusive)
+   * Optional - ISO 8601 datetime string
+   */
+  endDate: z.string().datetime({
+    message: 'End date must be a valid ISO 8601 datetime',
+  }).optional(),
+
+  /**
+   * Filter by homepage URL (case-insensitive partial match)
+   * Optional - searches within homepageUrl field
+   */
+  homepageUrl: z.string({
+    invalid_type_error: 'Homepage URL must be a string',
+  }).optional(),
+
+  /**
+   * Filter by session ID
+   * Optional - must be a valid UUID
+   */
+  sessionId: z.string().uuid('Invalid session ID format').optional(),
+});
+
+/**
+ * Schema for validating batch ID route parameters
+ *
+ * Ensures the batch ID is a valid UUID format
+ * Used in route parameter validation for batch management endpoints
+ *
+ * @example
+ * ```ts
+ * const params = { id: '550e8400-e29b-41d4-a716-446655440000' };
+ * batchIdParamSchema.parse(params);
+ * ```
+ */
+export const batchIdParamSchema = z.object({
+  /**
+   * Batch ID from route parameter
+   * Must be a valid UUID v4 format
+   */
+  id: z.string().uuid('Invalid batch ID format'),
+});
+
+/**
+ * Schema for batch export query parameters
+ *
+ * Controls the export format (PDF, JSON, or CSV)
+ *
+ * @example
+ * ```ts
+ * const query = { format: 'pdf' };
+ * batchExportQuerySchema.parse(query); // { format: 'pdf' }
+ * ```
+ */
+export const batchExportQuerySchema = z.object({
+  /**
+   * Export format: 'pdf', 'json', or 'csv'
+   * Defaults to 'pdf' if not provided
+   */
+  format: z.enum(['pdf', 'json', 'csv'], {
+    errorMap: () => ({ message: 'Format must be pdf, json, or csv' }),
+  }).default('pdf'),
+});
+
+/**
  * Schema for audit action enum values
  * Matches the AuditAction type from admin.types.ts
  */
@@ -661,6 +799,12 @@ export const AuditActionSchema = z.enum([
   'DELETE_SCAN',
   'RETRY_SCAN',
   'EXPORT_DATA',
+  'BATCH_LIST_VIEW',
+  'BATCH_DETAIL_VIEW',
+  'BATCH_CANCELLED',
+  'BATCH_DELETED',
+  'BATCH_EXPORTED',
+  'BATCH_RETRY',
 ], {
   errorMap: () => ({ message: 'Invalid audit action type' }),
 });
@@ -793,6 +937,37 @@ export const auditExportQuerySchema = z.object({
   action: AuditActionSchema.optional(),
 });
 
+/**
+ * Schema for validating report generation route parameters
+ *
+ * Ensures scan ID is a valid UUID and format is either 'pdf' or 'json'
+ * Used in route parameter validation for admin report generation endpoint
+ *
+ * @example
+ * ```ts
+ * const params = {
+ *   scanId: '550e8400-e29b-41d4-a716-446655440000',
+ *   format: 'pdf'
+ * };
+ * reportParamsSchema.parse(params);
+ * ```
+ */
+export const reportParamsSchema = z.object({
+  /**
+   * Scan ID from route parameter
+   * Must be a valid UUID v4 format
+   */
+  scanId: z.string().uuid('Invalid scan ID format'),
+
+  /**
+   * Report format from route parameter
+   * Must be either 'pdf' or 'json'
+   */
+  format: z.enum(['pdf', 'json'], {
+    errorMap: () => ({ message: 'Format must be pdf or json' }),
+  }),
+});
+
 // Type exports for TypeScript inference
 export type AdminRole = z.infer<typeof AdminRoleSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;
@@ -809,5 +984,9 @@ export type CustomerEmailParam = z.infer<typeof customerEmailParamSchema>;
 export type CustomerExportQuery = z.infer<typeof customerExportQuerySchema>;
 export type DashboardTrendsQuery = z.infer<typeof dashboardTrendsQuerySchema>;
 export type DashboardDomainsQuery = z.infer<typeof dashboardDomainsQuerySchema>;
+export type BatchListQuery = z.infer<typeof batchListQuerySchema>;
+export type BatchIdParam = z.infer<typeof batchIdParamSchema>;
+export type BatchExportQuery = z.infer<typeof batchExportQuerySchema>;
 export type AuditListQuery = z.infer<typeof auditListQuerySchema>;
 export type AuditExportQuery = z.infer<typeof auditExportQuerySchema>;
+export type ReportParams = z.infer<typeof reportParamsSchema>;

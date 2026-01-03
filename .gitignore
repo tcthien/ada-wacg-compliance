@@ -57,3 +57,10 @@ Thumbs.db
 *.tsbuildinfo
 .eslintcache
 .cache
+.credential
+.credential/aws-credential.txt
+.credential/ssh-credential.txt
+.credential/recaptchar-secret.txt
+.credential/cloudflare-api-key.txt
+.credential/adashield-prod-0c2377859697.json
+.*.pid

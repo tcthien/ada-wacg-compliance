@@ -8,6 +8,8 @@ import {
   calculateEstimatedTimeRemaining,
 } from '../utils/progress-tracker.js';
 import { getIssueSummary } from '../processors/scanner/index.js';
+import { batchStatusService } from '../services/batch-status.service.js';
+import { addEmailJob } from './email-queue.js';
 
 /**
  * Scan Page Job Processor
@@ -17,7 +19,7 @@ import { getIssueSummary } from '../processors/scanner/index.js';
  * 2. Run page scanner with progress updates
  * 3. Save ScanResult and Issues to database
  * 4. Update scan status to completed/failed
- * 5. Queue email job if email provided and duration > 30s
+ * 5. Queue email job if email provided
  *
  * Implements retry strategy:
  * - 3 attempts with exponential backoff
@@ -64,11 +66,12 @@ export interface ScanPageJobResult {
 /**
  * Queue email notification job
  *
- * TODO: Implement when email queue is created
- * For now, just logs the intent
+ * Adds an email notification job to the send-email queue.
+ * The job will be processed by the send-email worker which handles
+ * template rendering and email delivery via configured provider.
  *
- * @param scanId - Scan ID
- * @param email - Email address
+ * @param scanId - Scan ID for email context
+ * @param email - Recipient email address
  * @param type - Email type (scan_complete or scan_failed)
  */
 async function queueEmailNotification(
@@ -76,18 +79,25 @@ async function queueEmailNotification(
   email: string,
   type: 'scan_complete' | 'scan_failed' = 'scan_complete'
 ): Promise<void> {
-  // TODO: Import email queue and add job
-  // Example:
-  // const emailQueue = getEmailQueue();
-  // await emailQueue.add('send-email', {
-  //   scanId,
-  //   email,
-  //   type,
-  // });
+  try {
+    const job = await addEmailJob({
+      scanId,
+      email,
+      type,
+    });
 
-  console.log(
-    `📧 Would queue ${type} email for scan ${scanId} to ${email}`
-  );
+    console.log(
+      `📧 Queued ${type} email for scan ${scanId} to ${email} (job: ${job.id})`
+    );
+  } catch (error) {
+    // Log error but don't throw - email notification is non-critical
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    console.error(
+      `⚠️ Failed to queue ${type} email for scan ${scanId}:`,
+      errorMessage
+    );
+  }
 }
 
 /**
@@ -203,8 +213,30 @@ export async function processScanPageJob(
       message: `Scan completed. Found ${summary.total} issues.`,
     });
 
-    // Queue email notification if email provided and scan took > 30s
-    if (email && duration > 30000) {
+    // Notify batch status service if scan belongs to a batch
+    // Requirement 2.5: System shall auto-update batch status when all scans complete
+    try {
+      const batchResult = await batchStatusService.notifyScanComplete(
+        scanId,
+        'COMPLETED'
+      );
+      if (batchResult && batchResult.isComplete) {
+        console.log(
+          `✅ Batch ${batchResult.batchId} completed with status: ${batchResult.status}`
+        );
+      }
+    } catch (error) {
+      // Don't fail the scan if batch notification fails
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error(
+        `⚠️ Failed to notify batch status for scan ${scanId}:`,
+        errorMessage
+      );
+    }
+
+    // Queue email notification if email provided
+    if (email) {
       await queueEmailNotification(scanId, email, 'scan_complete');
     }
 
@@ -237,6 +269,28 @@ export async function processScanPageJob(
         durationMs: Date.now() - startTime,
       },
     });
+
+    // Notify batch status service if scan belongs to a batch
+    // Requirement 2.6: If ANY scan fails, batch status is FAILED with partial results
+    try {
+      const batchResult = await batchStatusService.notifyScanComplete(
+        scanId,
+        'FAILED'
+      );
+      if (batchResult && batchResult.isComplete) {
+        console.log(
+          `✅ Batch ${batchResult.batchId} completed with status: ${batchResult.status}`
+        );
+      }
+    } catch (batchError) {
+      // Don't fail the scan if batch notification fails
+      const batchErrorMessage =
+        batchError instanceof Error ? batchError.message : 'Unknown error';
+      console.error(
+        `⚠️ Failed to notify batch status for scan ${scanId}:`,
+        batchErrorMessage
+      );
+    }
 
     // Queue failure notification email if provided
     if (email) {

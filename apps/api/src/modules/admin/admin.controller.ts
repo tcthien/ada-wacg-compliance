@@ -43,6 +43,7 @@ import {
   dashboardDomainsQuerySchema,
   auditListQuerySchema,
   auditExportQuerySchema,
+  reportParamsSchema,
 } from './admin.schema.js';
 import {
   listAllScans,
@@ -83,7 +84,7 @@ import {
 const COOKIE_CONFIG = {
   httpOnly: true,
   secure: process.env['NODE_ENV'] === 'production',
-  // Use 'lax' in development to allow cross-port requests (3000 -> 3001)
+  // Use 'lax' in development to allow cross-port requests (3000 -> 3080)
   // Use 'strict' in production for maximum security
   sameSite: (process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax') as 'strict' | 'lax',
   maxAge: 24 * 60 * 60, // 24 hours in seconds
@@ -1606,6 +1607,293 @@ async function retryScanHandler(
   }
 }
 
+/**
+ * GET /api/v1/admin/scans/:scanId/reports
+ *
+ * Get report status for any scan (admin bypass)
+ *
+ * Admin-only endpoint that retrieves report status for both PDF and JSON formats
+ * without session ownership validation. This allows admins to check report status
+ * for any scan in the system.
+ *
+ * @param request - Fastify request with scan ID param
+ * @param reply - Fastify reply
+ * @returns Report status for both PDF and JSON formats
+ *
+ * @example
+ * GET /api/v1/admin/scans/550e8400-e29b-41d4-a716-446655440000/reports
+ * Cookie: adashield_admin_token=jwt-token
+ *
+ * Response 200:
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "scanId": "550e8400-e29b-41d4-a716-446655440000",
+ *     "scanStatus": "COMPLETED",
+ *     "reports": {
+ *       "pdf": {
+ *         "exists": true,
+ *         "url": "https://s3.amazonaws.com/...",
+ *         "createdAt": "2024-01-15T10:30:00.000Z",
+ *         "fileSizeBytes": 245678,
+ *         "expiresAt": "2024-01-15T11:30:00.000Z"
+ *       },
+ *       "json": null
+ *     }
+ *   }
+ * }
+ *
+ * Response 404:
+ * {
+ *   "success": false,
+ *   "error": "Scan not found",
+ *   "code": "SCAN_NOT_FOUND"
+ * }
+ */
+async function getScanReportsHandler(
+  request: FastifyRequest<{ Params: ScanIdParams }>,
+  reply: FastifyReply
+) {
+  const admin = request.adminUser;
+
+  if (!admin) {
+    return reply.code(401).send({
+      success: false,
+      error: 'Unauthorized',
+      code: 'UNAUTHORIZED',
+    });
+  }
+
+  try {
+    // Validate params
+    const params = scanIdParamSchema.parse(request.params);
+
+    // Get report status without sessionId (admin bypass)
+    const { getReportStatus } = await import('../reports/report.service.js');
+    const status = await getReportStatus(params.id);
+
+    // Log audit event
+    request.log.info({
+      event: 'ADMIN_GET_SCAN_REPORTS',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      scanId: params.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return reply.code(200).send({
+      success: true,
+      data: status,
+    });
+  } catch (error) {
+    // Handle validation errors
+    if (error instanceof z.ZodError) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Invalid scan ID',
+        code: 'VALIDATION_ERROR',
+        details: error.errors,
+      });
+    }
+
+    // Handle report service errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const reportError = error as { code: string; message: string };
+
+      if (reportError.code === 'SCAN_NOT_FOUND') {
+        return reply.code(404).send({
+          success: false,
+          error: reportError.message,
+          code: reportError.code,
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        error: reportError.message,
+        code: reportError.code,
+      });
+    }
+
+    // Handle unexpected errors
+    request.log.error(error, 'Unexpected error in getScanReportsHandler');
+    return reply.code(500).send({
+      success: false,
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR',
+    });
+  }
+}
+
+/**
+ * Request params type for report generation
+ */
+type ReportParams = z.infer<typeof reportParamsSchema>;
+
+/**
+ * POST /api/v1/admin/reports/:scanId/:format
+ *
+ * Generate or retrieve a report for any scan (admin bypass)
+ *
+ * Admin-only endpoint that generates or retrieves reports for any scan in the system
+ * without session ownership validation. This allows admins to generate reports for
+ * any scan regardless of who created it.
+ *
+ * @param request - Fastify request with scanId and format params
+ * @param reply - Fastify reply
+ * @returns Report URL (200), generation status (202), or error
+ *
+ * @example
+ * POST /api/v1/admin/reports/550e8400-e29b-41d4-a716-446655440000/pdf
+ * Cookie: adashield_admin_token=jwt-token
+ *
+ * Response 200 (report exists):
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "url": "https://s3.amazonaws.com/...",
+ *     "expiresAt": "2025-12-28T13:00:00.000Z"
+ *   }
+ * }
+ *
+ * Response 202 (generating):
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "status": "generating",
+ *     "jobId": "12345"
+ *   }
+ * }
+ *
+ * Response 404:
+ * {
+ *   "success": false,
+ *   "error": "Scan not found",
+ *   "code": "SCAN_NOT_FOUND"
+ * }
+ *
+ * Response 409:
+ * {
+ *   "success": false,
+ *   "error": "Scan must be completed before generating report",
+ *   "code": "SCAN_NOT_COMPLETED"
+ * }
+ */
+async function generateReportHandler(
+  request: FastifyRequest<{ Params: ReportParams }>,
+  reply: FastifyReply
+) {
+  const admin = request.adminUser;
+
+  if (!admin) {
+    return reply.code(401).send({
+      success: false,
+      error: 'Unauthorized',
+      code: 'UNAUTHORIZED',
+    });
+  }
+
+  try {
+    // Validate params
+    const params = reportParamsSchema.parse(request.params);
+
+    // Get or generate report without session check (admin bypass)
+    const { getOrGenerateReportAdmin } = await import('../reports/report.service.js');
+    const result = await getOrGenerateReportAdmin(params.scanId, params.format);
+
+    // Log audit event
+    request.log.info({
+      event: 'ADMIN_GENERATE_REPORT',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      scanId: params.scanId,
+      format: params.format,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Handle result based on status
+    switch (result.status) {
+      case 'ready':
+        return reply.code(200).send({
+          success: true,
+          data: {
+            url: result.url,
+            expiresAt: result.expiresAt?.toISOString(),
+          },
+        });
+
+      case 'generating':
+        return reply.code(202).send({
+          success: true,
+          data: {
+            status: 'generating',
+            jobId: result.jobId,
+          },
+        });
+
+      case 'not_found':
+        return reply.code(404).send({
+          success: false,
+          error: 'Scan not found',
+          code: 'SCAN_NOT_FOUND',
+        });
+
+      default:
+        // This should never happen due to TypeScript's exhaustive checking
+        return reply.code(500).send({
+          success: false,
+          error: 'Internal server error',
+          code: 'INTERNAL_ERROR',
+        });
+    }
+  } catch (error) {
+    // Handle validation errors
+    if (error instanceof z.ZodError) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Invalid request parameters',
+        code: 'VALIDATION_ERROR',
+        details: error.errors,
+      });
+    }
+
+    // Handle report service errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const reportError = error as { code: string; message: string };
+
+      if (reportError.code === 'SCAN_NOT_FOUND') {
+        return reply.code(404).send({
+          success: false,
+          error: reportError.message,
+          code: reportError.code,
+        });
+      }
+
+      if (reportError.code === 'SCAN_NOT_COMPLETED') {
+        return reply.code(409).send({
+          success: false,
+          error: reportError.message,
+          code: reportError.code,
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        error: reportError.message,
+        code: reportError.code,
+      });
+    }
+
+    // Handle unexpected errors
+    request.log.error(error, 'Unexpected error in generateReportHandler');
+    return reply.code(500).send({
+      success: false,
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR',
+    });
+  }
+}
+
 // ==================== CUSTOMER MANAGEMENT HANDLERS ====================
 
 /**
@@ -2790,6 +3078,8 @@ async function exportAuditLogsHandler(
  * - GET /api/v1/admin/scans/:id - Get scan details (requires auth)
  * - DELETE /api/v1/admin/scans/:id - Delete scan (requires auth)
  * - POST /api/v1/admin/scans/:id/retry - Retry failed scan (requires auth)
+ * - GET /api/v1/admin/scans/:id/reports - Get scan report status (requires auth)
+ * - POST /api/v1/admin/reports/:scanId/:format - Generate report for any scan (requires auth)
  *
  * Customer management endpoints:
  * - GET /api/v1/admin/customers - List all customers (requires auth)
@@ -2945,6 +3235,24 @@ export async function registerAdminRoutes(
       preHandler: [adminAuthMiddleware],
     },
     retryScanHandler as any
+  );
+
+  // GET /api/v1/admin/scans/:id/reports - Get scan report status (requires admin auth)
+  fastify.get(
+    `${prefix}/admin/scans/:id/reports`,
+    {
+      preHandler: [adminAuthMiddleware],
+    },
+    getScanReportsHandler as any
+  );
+
+  // POST /api/v1/admin/reports/:scanId/:format - Generate report for any scan (requires admin auth)
+  fastify.post(
+    `${prefix}/admin/reports/:scanId/:format`,
+    {
+      preHandler: [adminAuthMiddleware],
+    },
+    generateReportHandler as any
   );
 
   // ==================== CUSTOMER MANAGEMENT ROUTES ====================

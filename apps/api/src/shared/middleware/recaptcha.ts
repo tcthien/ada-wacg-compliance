@@ -175,6 +175,17 @@ export const recaptchaMiddleware: preHandlerHookHandler = async (
   reply: FastifyReply
 ) => {
   try {
+    // Skip reCAPTCHA validation in local environment
+    if (env.APP_ENV === 'local') {
+      (
+        request.log as unknown as { debug: (obj: object, msg: string) => void }
+      ).debug(
+        { path: request.url, appEnv: env.APP_ENV },
+        'APP_ENV=local, skipping reCAPTCHA validation'
+      );
+      return;
+    }
+
     // Check if reCAPTCHA is configured
     if (!env.RECAPTCHA_SECRET_KEY) {
       // Allow requests to pass through if reCAPTCHA is not configured

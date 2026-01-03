@@ -7,7 +7,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 const mockEnv = {
   NODE_ENV: 'test' as const,
   RECAPTCHA_SECRET_KEY: 'test-secret-key',
-  PORT: 3001,
+  PORT: 3080,
   HOST: '0.0.0.0',
   CORS_ORIGIN: 'http://localhost:5173',
   LOG_LEVEL: 'info' as const,

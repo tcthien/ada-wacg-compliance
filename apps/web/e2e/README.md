@@ -23,6 +23,22 @@ This directory contains end-to-end tests for the ADAShield web application using
   - Cookie consent
   - Data export
 
+- **export.spec.ts** - Tests user export functionality
+  - Viewing scans with existing reports
+  - Downloading existing PDF/JSON reports
+  - Generating new reports when none exist
+  - Modal progress display during generation
+  - Error handling and retry mechanisms
+  - Report generation cancellation
+
+- **admin-export.spec.ts** - Tests admin export functionality
+  - Admin access to export any scan
+  - Export button on admin scan detail page
+  - Modal progress in admin context
+  - No ownership restrictions for admin
+  - Disabled state for incomplete scans
+  - Error handling in admin context
+
 ## Running Tests
 
 ### Prerequisites
@@ -41,7 +57,7 @@ This directory contains end-to-end tests for the ADAShield web application using
    ```bash
    npm run dev
    ```
-   The app should be running on `http://localhost:3001`
+   The app should be running on `http://localhost:3080`
 
 ### Run All Tests
 
@@ -96,7 +112,7 @@ npm run test:e2e:report
 
 Configuration is in `playwright.config.ts`:
 
-- **Base URL**: `http://localhost:3001` (configurable via `PLAYWRIGHT_BASE_URL` env var)
+- **Base URL**: `http://localhost:3080` (configurable via `PLAYWRIGHT_BASE_URL` env var)
 - **Timeout**: 30 seconds per test
 - **Retries**: 2 retries on CI, 0 locally
 - **Screenshots**: On failure only
@@ -118,7 +134,7 @@ For CI/CD pipelines:
   run: npm run test:e2e
   env:
     CI: true
-    PLAYWRIGHT_BASE_URL: http://localhost:3001
+    PLAYWRIGHT_BASE_URL: http://localhost:3080
 ```
 
 ## Debugging Failed Tests

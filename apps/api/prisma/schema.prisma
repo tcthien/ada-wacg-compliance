@@ -18,6 +18,7 @@ enum ScanStatus {
   RUNNING
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 enum WcagLevel {
@@ -36,6 +37,13 @@ enum IssueImpact {
 enum ReportFormat {
   PDF
   JSON
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
 }
 
 enum AdminRole {
@@ -61,6 +69,56 @@ enum LogLevel {
   ERROR
 }
 
+enum DiscoveryStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum DiscoveryMode {
+  AUTO
+  MANUAL
+}
+
+enum DiscoveryPhase {
+  SITEMAP
+  NAVIGATION
+  CRAWLING
+}
+
+enum PageSource {
+  SITEMAP
+  NAVIGATION
+  CRAWLED
+  MANUAL
+}
+
+enum BatchStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  STALE
+}
+
+enum AiStatus {
+  PENDING
+  DOWNLOADED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum AiCampaignStatus {
+  ACTIVE
+  PAUSED
+  DEPLETED
+  ENDED
+}
+
 // ============================================================================
 // MODELS
 // ============================================================================
@@ -76,7 +134,8 @@ model GuestSession {
   anonymizedAt DateTime? @db.Timestamptz
 
   // Relations
-  scans Scan[]
+  scans      Scan[]
+  batchScans BatchScan[]
 
   // Indexes for performance
   @@index([fingerprint])
@@ -96,13 +155,32 @@ model Scan {
   wcagLevel      WcagLevel  @default(AA)
   durationMs     Int?
   errorMessage   String?    @db.Text
-  eventSummary   Json?      // Archived event summary after cleanup
+  eventSummary   Json? // Archived event summary after cleanup
   createdAt      DateTime   @default(now()) @db.Timestamptz
   updatedAt      DateTime   @updatedAt @db.Timestamptz
   completedAt    DateTime?  @db.Timestamptz
 
+  // Batch scan association (for multi-URL scanning)
+  batchId   String?    @db.Uuid
+  pageTitle String?    @db.VarChar(500) // Page title from discovery
+
+  // AI Early Bird Scan fields (Task 1.1a)
+  aiEnabled        Boolean   @default(false)
+  aiStatus         AiStatus?
+  aiSummary        String?   @db.Text
+  aiRemediationPlan String?  @db.Text
+  aiProcessedAt    DateTime? @db.Timestamptz
+
+  // AI token tracking fields (Task 1.1b)
+  aiInputTokens    Int?
+  aiOutputTokens   Int?
+  aiTotalTokens    Int?
+  aiModel          String?   @db.VarChar(100)
+  aiProcessingTime Int? // Processing time in seconds
+
   // Relations
   guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+  batch        BatchScan?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
   scanResult   ScanResult?
   reports      Report[]
   events       ScanEvent[]
@@ -118,6 +196,11 @@ model Scan {
   @@index([url])
   // Index for cleanup queries
   @@index([status, updatedAt])
+  // Index for batch queries
+  @@index([batchId])
+  // AI Early Bird indexes (Task 1.1c)
+  @@index([aiEnabled, aiStatus])
+  @@index([aiEnabled, createdAt])
   @@map("scans")
 }
 
@@ -157,6 +240,11 @@ model Issue {
   nodes        Json // Stores IssueNode[] as JSON
   createdAt    DateTime    @default(now()) @db.Timestamptz
 
+  // AI Early Bird fields - Enhanced issue analysis (Task 1.3)
+  aiExplanation   String? @db.Text // AI-generated plain language explanation of the issue
+  aiFixSuggestion String? @db.Text // AI-generated code suggestion for fixing the issue
+  aiPriority      Int? // Business impact score (1-10) calculated by AI
+
   // Relations
   scanResult ScanResult @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
 
@@ -167,11 +255,13 @@ model Issue {
   @@map("issues")
 }
 
-/// Generated report for a completed scan
+/// Generated report for a completed scan or batch scan
 model Report {
   id            String       @id @default(uuid()) @db.Uuid
-  scanId        String       @db.Uuid
+  scanId        String?      @db.Uuid
+  batchId       String?      @db.Uuid
   format        ReportFormat
+  status        ReportStatus @default(COMPLETED)
   storageKey    String       @db.VarChar(512)
   storageUrl    String       @db.VarChar(2048)
   fileSizeBytes Int
@@ -179,26 +269,30 @@ model Report {
   expiresAt     DateTime     @db.Timestamptz
 
   // Relations
-  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  scan  Scan?      @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  batch BatchScan? @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   // Indexes for performance
   @@index([scanId])
+  @@index([batchId])
   @@index([expiresAt])
+  // Unique constraints for report per scan/batch and format combination
+  @@unique([batchId, format])
   @@map("reports")
 }
 
 /// Admin user for system management
 model AdminUser {
-  id                 String      @id @default(uuid()) @db.Uuid
-  email              String      @unique @db.VarChar(255)
-  passwordHash       String      @db.VarChar(255)
-  role               AdminRole   @default(ADMIN)
-  isActive           Boolean     @default(true)
-  mustChangePassword Boolean     @default(false)
-  lastLoginAt        DateTime?   @db.Timestamptz
-  createdAt          DateTime    @default(now()) @db.Timestamptz
-  updatedAt          DateTime    @updatedAt @db.Timestamptz
-  createdById        String?     @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  email              String    @unique @db.VarChar(255)
+  passwordHash       String    @db.VarChar(255)
+  role               AdminRole @default(ADMIN)
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
+  lastLoginAt        DateTime? @db.Timestamptz
+  createdAt          DateTime  @default(now()) @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @db.Timestamptz
+  createdById        String?   @db.Uuid
 
   // Self-referential relation for tracking who created the admin
   createdBy     AdminUser?  @relation("AdminCreator", fields: [createdById], references: [id])
@@ -256,4 +350,164 @@ model ScanEvent {
   @@index([scanId, createdAt])
   @@index([createdAt])
   @@map("scan_events")
+}
+
+/// Website skeleton discovery job
+/// Tracks discovery process for finding pages in a website
+model Discovery {
+  id             String          @id @default(uuid()) @db.Uuid
+  sessionId      String?         @db.Uuid
+  homepageUrl    String          @db.VarChar(2048)
+  mode           DiscoveryMode   @default(AUTO)
+  status         DiscoveryStatus @default(PENDING)
+  phase          DiscoveryPhase?
+  maxPages       Int             @default(10)
+  maxDepth       Int             @default(1)
+  partialResults Boolean         @default(false)
+  createdAt      DateTime        @default(now()) @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @db.Timestamptz
+  completedAt    DateTime?       @db.Timestamptz
+  errorMessage   String?         @db.Text
+  errorCode      String?         @db.VarChar(100)
+
+  // Relations
+  pages      DiscoveredPage[]
+  batchScans BatchScan[]
+
+  // Indexes for performance
+  @@index([sessionId, createdAt])
+  @@index([status])
+  @@map("discoveries")
+}
+
+/// Discovered page during website skeleton discovery
+/// Stores individual URLs found through sitemap, navigation, or crawling
+model DiscoveredPage {
+  id          String     @id @default(uuid()) @db.Uuid
+  discoveryId String     @db.Uuid
+  url         String     @db.VarChar(2048)
+  title       String?    @db.VarChar(500)
+  source      PageSource
+  depth       Int
+  httpStatus  Int?
+  contentType String?    @db.VarChar(100)
+  createdAt   DateTime   @default(now()) @db.Timestamptz
+
+  // Relations
+  discovery Discovery @relation(fields: [discoveryId], references: [id], onDelete: Cascade)
+
+  // Unique constraint to prevent duplicate URLs per discovery
+  @@unique([discoveryId, url])
+  // Indexes for performance
+  @@index([discoveryId])
+  @@index([source])
+  @@map("discovered_pages")
+}
+
+/// Discovery usage tracking for monthly limit enforcement
+/// Tracks discovery consumption for both guest and registered users (3 discoveries/month free tier)
+model DiscoveryUsage {
+  id              String   @id @default(uuid()) @db.Uuid
+  sessionId       String?  @db.Uuid // Legacy/fallback identifier
+  guestSessionId  String?  @db.Uuid // For guest users tracked via cookie
+  customerId      String?  @db.Uuid // For registered users (may reference customers table)
+  month           DateTime @db.Date // First day of month (e.g., '2025-01-01')
+  discoveryCount  Int      @default(0)
+  pagesDiscovered Int      @default(0)
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+
+  // Unique constraints to prevent duplicate tracking
+  @@unique([customerId, month])
+  @@unique([guestSessionId, month])
+  // Index for cleanup queries
+  @@index([month])
+  @@map("discovery_usage")
+}
+
+/// Batch scan entity for grouping multiple URL scans together
+/// Enables multi-page scanning from discovery feature
+model BatchScan {
+  id             String      @id @default(uuid()) @db.Uuid
+  guestSessionId String?     @db.Uuid
+  userId         String?     @db.Uuid
+
+  // Batch metadata
+  homepageUrl String    @db.VarChar(2048)
+  wcagLevel   WcagLevel @default(AA)
+  discoveryId String?   @db.Uuid
+  email       String?   @db.VarChar(255) // Email for batch completion notification (Requirement 4.1)
+
+  // Status tracking
+  status         BatchStatus @default(PENDING)
+  totalUrls      Int
+  completedCount Int         @default(0)
+  failedCount    Int         @default(0)
+
+  // Aggregate results (computed on completion)
+  totalIssues   Int?
+  criticalCount Int?
+  seriousCount  Int?
+  moderateCount Int?
+  minorCount    Int?
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @db.Timestamptz
+  completedAt DateTime? @db.Timestamptz
+  cancelledAt DateTime? @db.Timestamptz
+
+  // Relations
+  guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+  discovery    Discovery?    @relation(fields: [discoveryId], references: [id], onDelete: SetNull)
+  scans        Scan[]
+  reports      Report[]
+
+  // Indexes for performance
+  @@index([guestSessionId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+  @@map("batch_scans")
+}
+
+/// AI Early Bird campaign for managing AI scan token budgets
+/// Enables scheduled AI processing campaigns with token budget controls
+model AiCampaign {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String            @db.VarChar(255)
+  totalTokenBudget Int // Total token budget allocated for this campaign
+  usedTokens       Int               @default(0) // Tokens consumed so far
+  reservedSlots    Int               @default(0) // Number of scans reserved for this campaign
+  avgTokensPerScan Int // Average tokens expected per scan (for budget planning)
+  status           AiCampaignStatus  @default(ACTIVE)
+  startsAt         DateTime          @db.Timestamptz // Campaign start time
+  endsAt           DateTime          @db.Timestamptz // Campaign end time
+  createdAt        DateTime          @default(now()) @db.Timestamptz
+  updatedAt        DateTime          @updatedAt @db.Timestamptz
+
+  // Relations
+  audits AiCampaignAudit[]
+
+  // Indexes for performance
+  @@index([status, startsAt])
+  @@map("ai_campaigns")
+}
+
+/// Audit log for tracking AI campaign actions and modifications
+/// Tracks all changes and administrative actions related to AI campaigns
+model AiCampaignAudit {
+  id         String   @id @default(uuid()) @db.Uuid
+  campaignId String   @db.Uuid
+  action     String   @db.VarChar(100)
+  details    Json
+  adminId    String?  @db.VarChar(255) // Nullable for automated actions
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  campaign AiCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance
+  @@index([campaignId, createdAt])
+  @@map("ai_campaign_audits")
 }

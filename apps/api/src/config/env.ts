@@ -13,6 +13,10 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
+
+  // Application Environment (local = skip reCAPTCHA, prod = require reCAPTCHA)
+  APP_ENV: z.enum(['local', 'prod']).default('local'),
+
   PORT: z.coerce.number().int().positive().default(3080),
   HOST: z.string().default('0.0.0.0'),
 

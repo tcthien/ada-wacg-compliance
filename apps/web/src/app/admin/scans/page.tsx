@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ScanTable } from '@/components/admin/ScanTable';
 import { adminApi, type ScanFilters } from '@/lib/admin-api';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Layers } from 'lucide-react';
 
 /**
  * Admin Scans List Page
@@ -29,6 +29,8 @@ export default function AdminScansPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [email, setEmail] = useState('');
+  const [batchFilter, setBatchFilter] = useState<ScanFilters['batchFilter'] | ''>('');
+  const [batchId, setBatchId] = useState('');
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -57,6 +59,8 @@ export default function AdminScansPage() {
       if (startDate) filters.startDate = startDate;
       if (endDate) filters.endDate = endDate;
       if (email) filters.userEmail = email;
+      if (batchFilter) filters.batchFilter = batchFilter;
+      if (batchFilter === 'specific' && batchId) filters.batchId = batchId;
 
       const response = await adminApi.scans.list(filters);
       // Transform to add userEmail for backward compatibility with ScanTable
@@ -79,7 +83,7 @@ export default function AdminScansPage() {
    */
   useEffect(() => {
     fetchScans();
-  }, [status, startDate, endDate, email, page]);
+  }, [status, startDate, endDate, email, batchFilter, batchId, page]);
 
   /**
    * Reset all filters to default values
@@ -89,6 +93,8 @@ export default function AdminScansPage() {
     setStartDate('');
     setEndDate('');
     setEmail('');
+    setBatchFilter('');
+    setBatchId('');
     setPage(1);
   };
 
@@ -132,7 +138,7 @@ export default function AdminScansPage() {
   /**
    * Check if filters are active
    */
-  const hasActiveFilters = status || startDate || endDate || email;
+  const hasActiveFilters = status || startDate || endDate || email || batchFilter;
 
   return (
     <div className="space-y-6">
@@ -232,6 +238,64 @@ export default function AdminScansPage() {
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
+        </div>
+
+        {/* Batch filter row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+          {/* Batch filter dropdown */}
+          <div>
+            <label
+              htmlFor="batch-filter"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              <span className="inline-flex items-center gap-1">
+                <Layers className="h-4 w-4" />
+                Batch Filter
+              </span>
+            </label>
+            <select
+              id="batch-filter"
+              value={batchFilter}
+              onChange={(e) => {
+                const value = e.target.value as ScanFilters['batchFilter'] | '';
+                setBatchFilter(value);
+                // Clear batch ID if not filtering by specific batch
+                if (value !== 'specific') {
+                  setBatchId('');
+                }
+                setPage(1);
+              }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">All scans</option>
+              <option value="batched">Batched Only</option>
+              <option value="nonBatched">Non-Batched Only</option>
+              <option value="specific">Specific Batch</option>
+            </select>
+          </div>
+
+          {/* Specific batch ID input - shown only when "Specific Batch" is selected */}
+          {batchFilter === 'specific' && (
+            <div>
+              <label
+                htmlFor="batch-id-filter"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Batch ID
+              </label>
+              <input
+                type="text"
+                id="batch-id-filter"
+                value={batchId}
+                onChange={(e) => {
+                  setBatchId(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Enter batch ID..."
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          )}
         </div>
 
         {/* Reset filters button */}

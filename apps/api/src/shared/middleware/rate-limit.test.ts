@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
-import { createRateLimitMiddleware, RATE_LIMIT_CONFIG } from './rate-limit.js';
+import {
+  createRateLimitMiddleware,
+  RATE_LIMIT_CONFIG,
+  checkBatchRateLimit,
+  BATCH_RATE_LIMIT_CONFIG,
+  type BatchRateLimitInfo,
+} from './rate-limit.js';
 
 /**
  * Mock Redis client
@@ -450,6 +456,294 @@ describe('Rate Limit Middleware', () => {
       expect(mockPipeline.expire).toHaveBeenCalledWith(
         expect.any(String),
         RATE_LIMIT_CONFIG.WINDOW_SECONDS
+      );
+    });
+  });
+
+  describe('checkBatchRateLimit', () => {
+    it('should allow batch submission when under limits', async () => {
+      // Mock Redis responses - no previous usage
+      (mockRedisClient.get as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+      const mockPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([
+          [null, 10], // incrby result
+          [null, 'OK'], // expire result
+          [null, 1], // incr result
+          [null, 'OK'], // expire result
+        ]),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockPipeline);
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      const result = await checkBatchRateLimit('test-session', 10);
+
+      expect(result.exceeded).toBe(false);
+      expect(result.urlCount).toBe(10);
+      expect(result.batchCount).toBe(1);
+      expect(result.remainingUrls).toBe(BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR - 10);
+      expect(result.remainingBatches).toBe(BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR - 1);
+      expect(result.maxUrls).toBe(100);
+      expect(result.maxBatches).toBe(2);
+    });
+
+    it('should throw when URL limit exceeded', async () => {
+      // Mock Redis responses - 95 URLs already used
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('95') // URL count
+        .mockResolvedValueOnce('1'); // Batch count
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      await expect(checkBatchRateLimit('test-session', 10)).rejects.toMatchObject({
+        exceeded: true,
+        message: expect.stringContaining('URL limit exceeded'),
+        urlCount: 95,
+        remainingUrls: 5,
+      });
+    });
+
+    it('should throw when batch limit exceeded', async () => {
+      // Mock Redis responses - 2 batches already used
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('50') // URL count
+        .mockResolvedValueOnce('2'); // Batch count
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      await expect(checkBatchRateLimit('test-session', 10)).rejects.toMatchObject({
+        exceeded: true,
+        message: expect.stringContaining('Batch limit exceeded'),
+        batchCount: 2,
+        remainingBatches: 0,
+      });
+    });
+
+    it('should include both error messages when both limits exceeded', async () => {
+      // Mock Redis responses - both limits at max
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('95') // URL count
+        .mockResolvedValueOnce('2'); // Batch count
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      try {
+        await checkBatchRateLimit('test-session', 10);
+        expect.fail('Should have thrown');
+      } catch (error) {
+        const rateLimitError = error as BatchRateLimitInfo;
+        expect(rateLimitError.exceeded).toBe(true);
+        expect(rateLimitError.message).toContain('URL limit exceeded');
+        expect(rateLimitError.message).toContain('Batch limit exceeded');
+      }
+    });
+
+    it('should return correct rate limit info with partial usage', async () => {
+      // Mock Redis responses - 30 URLs, 1 batch already used
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('30') // URL count
+        .mockResolvedValueOnce('1'); // Batch count
+
+      const mockPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([
+          [null, 50], // incrby result (30 + 20)
+          [null, 'OK'], // expire result
+          [null, 2], // incr result (1 + 1)
+          [null, 'OK'], // expire result
+        ]),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockPipeline);
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(1800);
+
+      const result = await checkBatchRateLimit('test-session', 20);
+
+      expect(result.urlCount).toBe(50); // 30 + 20
+      expect(result.batchCount).toBe(2); // 1 + 1
+      expect(result.remainingUrls).toBe(50); // 100 - 50
+      expect(result.remainingBatches).toBe(0); // 2 - 2
+      expect(result.resetTime).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    });
+
+    it('should fail open on Redis errors', async () => {
+      vi.clearAllMocks(); // Clear any previous mocks
+
+      // Mock Redis to completely fail
+      (mockRedisClient.get as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('Redis connection failed')
+      );
+
+      const mockFailPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockRejectedValue(new Error('Redis pipeline failed')),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockFailPipeline);
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('Redis TTL failed')
+      );
+
+      const result = await checkBatchRateLimit('test-session-fail-open', 10);
+
+      expect(result.exceeded).toBe(false);
+      expect(result.urlCount).toBe(0); // Should be 0 when failed open
+      expect(result.remainingUrls).toBe(BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR);
+      expect(result.remainingBatches).toBe(BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR);
+    });
+
+    it('should use Redis pipeline for atomic updates', async () => {
+      (mockRedisClient.get as ReturnType<typeof vi.fn>).mockResolvedValue('0');
+
+      const mockPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([
+          [null, 10],
+          [null, 'OK'],
+          [null, 1],
+          [null, 'OK'],
+        ]),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockPipeline);
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      await checkBatchRateLimit('test-session', 10);
+
+      expect(mockRedisClient.pipeline).toHaveBeenCalled();
+      expect(mockPipeline.incrby).toHaveBeenCalledWith(
+        expect.stringContaining('rate_limit_batch_urls:test-session'),
+        10
+      );
+      expect(mockPipeline.incr).toHaveBeenCalledWith(
+        expect.stringContaining('rate_limit_batch_count:test-session')
+      );
+      expect(mockPipeline.expire).toHaveBeenCalledTimes(2);
+      expect(mockPipeline.exec).toHaveBeenCalled();
+    });
+
+    it('should enforce exact URL limit (100 URLs)', async () => {
+      // Mock 99 URLs already used
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('99')
+        .mockResolvedValueOnce('0');
+
+      const mockPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([
+          [null, 100],
+          [null, 'OK'],
+          [null, 1],
+          [null, 'OK'],
+        ]),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockPipeline);
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      // Should allow exactly 1 more URL
+      const result = await checkBatchRateLimit('test-session', 1);
+      expect(result.exceeded).toBe(false);
+      expect(result.urlCount).toBe(100);
+      expect(result.remainingUrls).toBe(0);
+
+      // Should reject 2 URLs
+      vi.clearAllMocks();
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('99')
+        .mockResolvedValueOnce('0');
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      await expect(checkBatchRateLimit('test-session', 2)).rejects.toMatchObject({
+        exceeded: true,
+        message: expect.stringContaining('URL limit exceeded'),
+      });
+    });
+
+    it('should enforce exact batch limit (2 batches)', async () => {
+      // Mock 1 batch already used
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('30')
+        .mockResolvedValueOnce('1');
+
+      const mockPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([
+          [null, 40],
+          [null, 'OK'],
+          [null, 2],
+          [null, 'OK'],
+        ]),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockPipeline);
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      // Should allow exactly 1 more batch
+      const result = await checkBatchRateLimit('test-session', 10);
+      expect(result.exceeded).toBe(false);
+      expect(result.batchCount).toBe(2);
+      expect(result.remainingBatches).toBe(0);
+
+      // Should reject 3rd batch
+      vi.clearAllMocks();
+      (mockRedisClient.get as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('40')
+        .mockResolvedValueOnce('2');
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      await expect(checkBatchRateLimit('test-session', 10)).rejects.toMatchObject({
+        exceeded: true,
+        message: expect.stringContaining('Batch limit exceeded'),
+      });
+    });
+
+    it('should include reset time in response', async () => {
+      (mockRedisClient.get as ReturnType<typeof vi.fn>).mockResolvedValue('0');
+
+      const mockPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([[null, 10], [null, 'OK'], [null, 1], [null, 'OK']]),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockPipeline);
+
+      const ttl = 1800;
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(ttl);
+
+      const now = Math.floor(Date.now() / 1000);
+      const result = await checkBatchRateLimit('test-session', 10);
+
+      expect(result.resetTime).toBeGreaterThanOrEqual(now + ttl - 5);
+      expect(result.resetTime).toBeLessThanOrEqual(now + ttl + 5);
+    });
+
+    it('should set correct TTL on keys', async () => {
+      (mockRedisClient.get as ReturnType<typeof vi.fn>).mockResolvedValue('0');
+
+      const mockPipeline = {
+        incrby: vi.fn().mockReturnThis(),
+        incr: vi.fn().mockReturnThis(),
+        expire: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([[null, 10], [null, 'OK'], [null, 1], [null, 'OK']]),
+      };
+      (mockRedisClient.pipeline as ReturnType<typeof vi.fn>).mockReturnValue(mockPipeline);
+      (mockRedisClient.ttl as ReturnType<typeof vi.fn>).mockResolvedValue(3600);
+
+      await checkBatchRateLimit('test-session', 10);
+
+      expect(mockPipeline.expire).toHaveBeenCalledWith(
+        expect.stringContaining('rate_limit_batch_urls:test-session'),
+        3600
+      );
+      expect(mockPipeline.expire).toHaveBeenCalledWith(
+        expect.stringContaining('rate_limit_batch_count:test-session'),
+        3600
       );
     });
   });

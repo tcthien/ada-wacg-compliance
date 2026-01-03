@@ -2,17 +2,29 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import cookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 import { env } from './config/env.js';
 import { checkRedisHealth, closeRedisConnection } from './config/redis.js';
 import { registerSessionRoutes } from './modules/sessions/session.controller.js';
 import { registerReportRoutes } from './modules/reports/report.controller.js';
 import { registerScanRoutes } from './modules/scans/scan.controller.js';
 import { registerScanEventRoutes } from './modules/scans/scan-event.controller.js';
-import { registerAdminRoutes } from './modules/admin/index.js';
+import { registerAdminRoutes, registerBatchAdminRoutes } from './modules/admin/index.js';
+import { registerDiscoveryRoutes } from './modules/discovery/index.js';
+import { registerBatchRoutes } from './modules/batches/index.js';
+import { registerAiCampaignRoutes, registerAiQueueRoutes } from './modules/ai-campaign/index.js';
 import {
   startCleanupScheduler,
   stopCleanupScheduler,
 } from './jobs/cleanup-scan-events.job.js';
+import {
+  startStaleCheckerScheduler,
+  stopStaleCheckerScheduler,
+} from './jobs/batch-stale-checker.job.js';
+import {
+  registerDiscoveryWorker,
+  stopDiscoveryWorker,
+} from './modules/discovery/discovery.worker.js';
 
 /**
  * ADAShield API Server
@@ -63,6 +75,13 @@ async function buildServer() {
     parseOptions: {},
   });
 
+  // Multipart support for file uploads
+  await server.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max file size
+    },
+  });
+
   // Health check endpoint
   server.get(`${env.API_PREFIX}/health`, async (request, reply) => {
     const redisHealth = await checkRedisHealth();
@@ -95,7 +114,12 @@ async function buildServer() {
   await registerScanRoutes(server, env.API_PREFIX);
   await registerScanEventRoutes(server, env.API_PREFIX);
   await registerReportRoutes(server, env.API_PREFIX);
+  await registerBatchRoutes(server, env.API_PREFIX);
+  await registerDiscoveryRoutes(server, env.API_PREFIX);
   await registerAdminRoutes(server, env.API_PREFIX);
+  await registerBatchAdminRoutes(server, env.API_PREFIX);
+  await registerAiCampaignRoutes(server, env.API_PREFIX);
+  await registerAiQueueRoutes(server);
 
   return server;
 }
@@ -114,6 +138,10 @@ async function start() {
 
     // Start scheduled jobs
     startCleanupScheduler();
+    startStaleCheckerScheduler();
+
+    // Start discovery worker for background job processing
+    registerDiscoveryWorker();
 
     console.log(`
 🚀 ADAShield API Server started successfully!
@@ -135,6 +163,8 @@ async function start() {
 process.on('SIGINT', async () => {
   console.log('\n👋 Shutting down gracefully...');
   stopCleanupScheduler();
+  stopStaleCheckerScheduler();
+  await stopDiscoveryWorker();
   await closeRedisConnection();
   process.exit(0);
 });
@@ -142,6 +172,8 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   console.log('\n👋 Shutting down gracefully...');
   stopCleanupScheduler();
+  stopStaleCheckerScheduler();
+  await stopDiscoveryWorker();
   await closeRedisConnection();
   process.exit(0);
 });

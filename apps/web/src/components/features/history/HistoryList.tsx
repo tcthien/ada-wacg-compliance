@@ -1,106 +1,236 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useScanHistory } from '@/hooks/useScanHistory';
 import { HistoryCard } from './HistoryCard';
 import { ScanStatus } from '@/lib/api';
+import { batchApi, BatchStatusResponse } from '@/lib/batch-api';
+import { useHistoryFilterStore } from '@/stores/history-filter-store';
+import { EmptyHistory, EmptySearchResults } from '@/components/ui/empty-state';
+import { HistoryItemSkeleton } from '@/components/ui/skeleton';
+import { useRouter } from 'next/navigation';
 
-type SortField = 'date' | 'url' | 'issues';
-type StatusFilter = 'all' | ScanStatus;
+type ItemType = 'scan' | 'batch';
+// Extended status type that includes batch-specific statuses
+type HistoryStatus = ScanStatus | 'CANCELLED' | 'STALE';
+
+// Unified history item interface
+interface HistoryItem {
+  id: string;
+  type: ItemType;
+  url: string;
+  status: HistoryStatus;
+  wcagLevel: string;
+  createdAt: string;
+  completedAt?: string | null | undefined;
+  issueCount?: number | undefined;
+  // Batch-specific fields
+  totalUrls?: number | undefined;
+  completedCount?: number | undefined;
+  failedCount?: number | undefined;
+}
 
 export function HistoryList() {
-  const [sortBy, setSortBy] = useState<SortField>('date');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const { scans, loading, error, loadMore, hasMore } = useScanHistory();
+  const router = useRouter();
 
-  // Sort scans
-  const sortedScans = [...scans].sort((a, b) => {
+  // Get filter/sort state from the store
+  const {
+    dateRange,
+    scanTypes,
+    searchQuery,
+    sortBy,
+    sortOrder,
+    selectedIds,
+    toggleSelection,
+    resetFilters,
+  } = useHistoryFilterStore();
+
+  const { scans, loading: scansLoading, error: scansError, loadMore, hasMore } = useScanHistory();
+  const [batches, setBatches] = useState<BatchStatusResponse[]>([]);
+  const [batchesLoading, setBatchesLoading] = useState(true);
+  const [batchesError, setBatchesError] = useState<string | null>(null);
+
+  // Fetch batches on mount
+  useEffect(() => {
+    async function fetchBatches() {
+      try {
+        setBatchesLoading(true);
+        const response = await batchApi.list({ page: 1, limit: 100 });
+        setBatches(response.batches);
+        setBatchesError(null);
+      } catch (err) {
+        setBatchesError(err instanceof Error ? err.message : 'Failed to load batches');
+      } finally {
+        setBatchesLoading(false);
+      }
+    }
+    fetchBatches();
+  }, []);
+
+  // Convert batches and scans to unified HistoryItem format
+  const batchItems: HistoryItem[] = batches.map(batch => ({
+    id: batch.batchId,
+    type: 'batch' as const,
+    url: batch.homepageUrl,
+    status: batch.status as HistoryStatus,
+    wcagLevel: batch.wcagLevel,
+    createdAt: batch.createdAt,
+    completedAt: batch.completedAt,
+    totalUrls: batch.totalUrls,
+    completedCount: batch.completedCount,
+    failedCount: batch.failedCount,
+    // issueCount is intentionally omitted for batches - will be undefined
+  }));
+
+  const scanItems: HistoryItem[] = scans.map(scan => ({
+    id: scan.id,
+    type: 'scan' as const,
+    url: scan.url,
+    status: scan.status,
+    wcagLevel: scan.wcagLevel,
+    createdAt: scan.createdAt,
+    completedAt: scan.completedAt,
+    issueCount: scan.issueCount,
+  }));
+
+  // Combine all items
+  const allItems = [...batchItems, ...scanItems];
+
+  // Apply filters
+  let filteredItems = allItems;
+
+  // Filter by date range
+  if (dateRange.start) {
+    filteredItems = filteredItems.filter(
+      (item) => new Date(item.createdAt) >= dateRange.start!
+    );
+  }
+  if (dateRange.end) {
+    filteredItems = filteredItems.filter(
+      (item) => new Date(item.createdAt) <= dateRange.end!
+    );
+  }
+
+  // Filter by scan type
+  if (scanTypes.length > 0) {
+    filteredItems = filteredItems.filter((item) => {
+      const itemType = item.type === 'batch' ? 'batch' : 'single';
+      return scanTypes.includes(itemType as any);
+    });
+  }
+
+  // Filter by search query (URL)
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filteredItems = filteredItems.filter((item) =>
+      item.url.toLowerCase().includes(query)
+    );
+  }
+
+  // Sort items
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    let comparison = 0;
+
     switch (sortBy) {
       case 'date':
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
+        comparison = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        break;
       case 'url':
-        return a.url.localeCompare(b.url);
+        comparison = a.url.localeCompare(b.url);
+        break;
       case 'issues':
-        return (b.issueCount || 0) - (a.issueCount || 0);
+        comparison = (b.issueCount || 0) - (a.issueCount || 0);
+        break;
       default:
-        return 0;
+        comparison = 0;
     }
+
+    // Apply sort order (ascending or descending)
+    return sortOrder === 'asc' ? -comparison : comparison;
   });
 
-  // Filter scans
-  const filteredScans =
-    statusFilter === 'all'
-      ? sortedScans
-      : sortedScans.filter((s) => s.status === statusFilter);
+  const loading = scansLoading || batchesLoading;
+  const error = scansError || batchesError;
 
-  if (loading && scans.length === 0) {
-    return <div className="text-center py-8">Loading...</div>;
-  }
+  // Determine if filters are active
+  const hasActiveFilters =
+    dateRange.start !== null ||
+    dateRange.end !== null ||
+    scanTypes.length > 0 ||
+    searchQuery.trim() !== '';
 
-  if (error) {
-    return <div className="text-red-600">{error}</div>;
-  }
-
-  if (scans.length === 0) {
+  // Loading state with skeleton
+  if (loading && allItems.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        No scans yet. Start by scanning a website on the home page.
+      <div className="space-y-3">
+        <HistoryItemSkeleton />
+        <HistoryItemSkeleton />
+        <HistoryItemSkeleton />
       </div>
     );
   }
 
+  // Error state
+  if (error) {
+    return <div className="text-red-600">{error}</div>;
+  }
+
+  // Empty state - no scans at all
+  if (allItems.length === 0) {
+    return (
+      <EmptyHistory
+        onAction={() => router.push('/')}
+      />
+    );
+  }
+
+  /**
+   * Handle selection toggle for an item
+   */
+  const handleSelectionToggle = (item: HistoryItem) => {
+    const itemId = `${item.type}-${item.id}`;
+    toggleSelection(itemId);
+  };
+
+  /**
+   * Check if an item is selected
+   */
+  const isItemSelected = (item: HistoryItem): boolean => {
+    const itemId = `${item.type}-${item.id}`;
+    return selectedIds.has(itemId);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Controls */}
-      <div className="flex flex-wrap gap-4 justify-between">
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Sort by:</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortField)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="date">Date</option>
-            <option value="url">URL</option>
-            <option value="issues">Issue Count</option>
-          </select>
+      {/* History list */}
+      {sortedItems.length === 0 ? (
+        // No results after filtering - show empty search state
+        hasActiveFilters ? (
+          <EmptySearchResults onAction={resetFilters} />
+        ) : (
+          <EmptySearchResults />
+        )
+      ) : (
+        <div className="space-y-3">
+          {sortedItems.map((item) => (
+            <HistoryCard
+              key={`${item.type}-${item.id}`}
+              item={item}
+              isSelected={isItemSelected(item)}
+              onSelectionChange={() => handleSelectionToggle(item)}
+            />
+          ))}
         </div>
+      )}
 
-        {/* Filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Status:</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="all">All</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="RUNNING">Running</option>
-            <option value="PENDING">Pending</option>
-            <option value="FAILED">Failed</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Scan list */}
-      <div className="space-y-3">
-        {filteredScans.map((scan) => (
-          <HistoryCard key={scan.id} scan={scan} />
-        ))}
-      </div>
-
-      {/* Load more */}
+      {/* Load more (only for single scans) */}
       {hasMore && (
         <button
           onClick={loadMore}
-          disabled={loading}
+          disabled={scansLoading}
           className="w-full py-2 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Loading...' : 'Load More'}
+          {scansLoading ? 'Loading...' : 'Load More'}
         </button>
       )}
     </div>

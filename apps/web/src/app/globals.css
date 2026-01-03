@@ -57,3 +57,52 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Screen reader only utilities for WCAG 2.4.1 (Bypass Blocks) */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .not-sr-only {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  /* Touch target utilities for WCAG 2.5.5 compliance (minimum 44x44px) */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  .touch-target-lg {
+    @apply min-h-[48px] min-w-[48px];
+  }
+
+  /* For elements that need touch target spacing without changing their size */
+  .touch-target-padding {
+    @apply p-2;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Interactive element spacing for mobile touch */
+  @media (max-width: 768px) {
+    .touch-spacing {
+      @apply gap-2;
+    }
+  }
+}

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 /**
  * E2E Tests: Admin Scan Console
  *
- * PREREQUISITE: Dev server must be running on http://localhost:3001
+ * PREREQUISITE: Dev server must be running on http://localhost:3080
  * Run: npm run dev (from apps/web directory)
  *
  * Tests the admin-specific scan console functionality:

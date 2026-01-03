@@ -15,7 +15,7 @@ Investigated why scan `8fb219cf-d1f0-4974-8c3e-1ff050f665cc` remains in PENDING 
 **The Worker application is NOT running.**
 
 The system architecture requires three applications to be running:
-1. ✅ API (`apps/api`) - Running on port 3001
+1. ✅ API (`apps/api`) - Running on port 3080
 2. ✅ Web (`apps/web`) - Running on port 3000
 3. ❌ **Worker (`apps/worker`) - NOT RUNNING**
 
@@ -52,7 +52,7 @@ Since the Worker is not running, jobs sit in the queue forever and scans remain 
 ### Data Flow Analysis
 
 ```
-User Request → API (port 3001)
+User Request → API (port 3080)
                     ↓
               PostgreSQL (scan record: PENDING)
                     ↓

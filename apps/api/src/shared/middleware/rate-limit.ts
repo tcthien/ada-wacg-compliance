@@ -27,7 +27,19 @@ import { generateFingerprint } from '../utils/fingerprint.js';
  */
 export const RATE_LIMIT_CONFIG = {
   /** Maximum requests per window */
-  MAX_REQUESTS: 10,
+  MAX_REQUESTS: 100, // Increased for testing (was 10)
+  /** Window duration in seconds (1 hour) */
+  WINDOW_SECONDS: 3600,
+} as const;
+
+/**
+ * Batch rate limit configuration
+ */
+export const BATCH_RATE_LIMIT_CONFIG = {
+  /** Maximum URLs per hour per guest session */
+  MAX_URLS_PER_HOUR: 100,
+  /** Maximum batches per hour per guest session */
+  MAX_BATCHES_PER_HOUR: 2,
   /** Window duration in seconds (1 hour) */
   WINDOW_SECONDS: 3600,
 } as const;
@@ -270,3 +282,158 @@ export function createRateLimitMiddleware(
  * );
  */
 export const rateLimitMiddleware = createRateLimitMiddleware('url');
+
+/**
+ * Batch rate limit info response
+ */
+export interface BatchRateLimitInfo {
+  /** Current URL count in the window */
+  urlCount: number;
+  /** Remaining URLs allowed in the window */
+  remainingUrls: number;
+  /** Maximum URLs per hour */
+  maxUrls: number;
+  /** Current batch count in the window */
+  batchCount: number;
+  /** Remaining batches allowed in the window */
+  remainingBatches: number;
+  /** Maximum batches per hour */
+  maxBatches: number;
+  /** Time when the rate limit resets (Unix timestamp) */
+  resetTime: number;
+  /** Whether the request would exceed rate limits */
+  exceeded: boolean;
+  /** Error message if limit exceeded */
+  message?: string;
+}
+
+/**
+ * Check batch rate limits for a guest session
+ *
+ * Validates both URL count (max 100/hour) and batch count (max 2/hour)
+ * limits for a guest session. Uses Redis to track usage with 1-hour TTL.
+ *
+ * @param sessionId - Guest session ID
+ * @param urlCount - Number of URLs in the batch to check
+ * @param request - Optional Fastify request for logging
+ * @returns Rate limit information including current usage and limits
+ * @throws Error with detailed rate limit info if limits would be exceeded
+ *
+ * @example
+ * try {
+ *   const rateLimitInfo = await checkBatchRateLimit(sessionId, urls.length);
+ *   // Process batch
+ * } catch (error) {
+ *   // Handle rate limit exceeded
+ *   return reply.code(429).send(error);
+ * }
+ */
+export async function checkBatchRateLimit(
+  sessionId: string,
+  urlCount: number,
+  request?: FastifyRequest
+): Promise<BatchRateLimitInfo> {
+  try {
+    const redis = getRedisClient();
+
+    // Get Redis keys for URL count and batch count
+    const urlCountKey = RedisKeys.RATE_LIMIT_BATCH_URLS.build(sessionId);
+    const batchCountKey = RedisKeys.RATE_LIMIT_BATCH_COUNT.build(sessionId);
+
+    // Get current counts
+    const [currentUrlCount, currentBatchCount] = await Promise.all([
+      getCurrentCount(urlCountKey, request),
+      getCurrentCount(batchCountKey, request),
+    ]);
+
+    // Calculate new totals
+    const newUrlCount = currentUrlCount + urlCount;
+    const newBatchCount = currentBatchCount + 1;
+
+    // Get TTL for reset time calculation
+    const ttl = await getTTL(urlCountKey, request);
+    const resetTime = Math.floor(Date.now() / 1000) + ttl;
+
+    // Check if limits would be exceeded
+    const urlLimitExceeded = newUrlCount > BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR;
+    const batchLimitExceeded = newBatchCount > BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR;
+
+    // Build rate limit info
+    const rateLimitInfo: BatchRateLimitInfo = {
+      urlCount: currentUrlCount,
+      remainingUrls: Math.max(0, BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR - currentUrlCount),
+      maxUrls: BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR,
+      batchCount: currentBatchCount,
+      remainingBatches: Math.max(0, BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR - currentBatchCount),
+      maxBatches: BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR,
+      resetTime,
+      exceeded: urlLimitExceeded || batchLimitExceeded,
+    };
+
+    // If limits exceeded, add error message and throw
+    if (urlLimitExceeded || batchLimitExceeded) {
+      const messages: string[] = [];
+
+      if (urlLimitExceeded) {
+        messages.push(
+          `URL limit exceeded. Maximum ${BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR} URLs per hour ` +
+          `(current: ${currentUrlCount}, requested: ${urlCount}).`
+        );
+      }
+
+      if (batchLimitExceeded) {
+        messages.push(
+          `Batch limit exceeded. Maximum ${BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR} batches per hour ` +
+          `(current: ${currentBatchCount}).`
+        );
+      }
+
+      rateLimitInfo.message = messages.join(' ');
+      throw rateLimitInfo;
+    }
+
+    // Increment counters using pipeline for atomicity
+    const pipeline = redis.pipeline();
+    pipeline.incrby(urlCountKey, urlCount);
+    pipeline.expire(urlCountKey, RedisKeys.RATE_LIMIT_BATCH_URLS.ttl);
+    pipeline.incr(batchCountKey);
+    pipeline.expire(batchCountKey, RedisKeys.RATE_LIMIT_BATCH_COUNT.ttl);
+
+    await pipeline.exec();
+
+    // Update the info with new counts
+    rateLimitInfo.urlCount = newUrlCount;
+    rateLimitInfo.remainingUrls = Math.max(0, BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR - newUrlCount);
+    rateLimitInfo.batchCount = newBatchCount;
+    rateLimitInfo.remainingBatches = Math.max(0, BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR - newBatchCount);
+
+    return rateLimitInfo;
+  } catch (error) {
+    // If it's our rate limit error, re-throw it
+    if (error && typeof error === 'object' && 'exceeded' in error) {
+      throw error;
+    }
+
+    // Log Redis errors but fail open
+    if (request?.log) {
+      (request.log as unknown as { error: (obj: object, msg: string) => void }).error(
+        { error: error instanceof Error ? error.message : 'Unknown error' },
+        'Batch rate limit check error'
+      );
+    } else {
+      console.error('Batch rate limit check error:', error);
+    }
+
+    // Fail open - return info allowing the request
+    return {
+      urlCount: 0,
+      remainingUrls: BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR,
+      maxUrls: BATCH_RATE_LIMIT_CONFIG.MAX_URLS_PER_HOUR,
+      batchCount: 0,
+      remainingBatches: BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR,
+      maxBatches: BATCH_RATE_LIMIT_CONFIG.MAX_BATCHES_PER_HOUR,
+      resetTime: Math.floor(Date.now() / 1000) + BATCH_RATE_LIMIT_CONFIG.WINDOW_SECONDS,
+      exceeded: false,
+    };
+  }
+}

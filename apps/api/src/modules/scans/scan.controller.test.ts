@@ -471,6 +471,146 @@ describe('Scan Controller', () => {
     });
   });
 
+  describe('DELETE /api/v1/scans/bulk', () => {
+    it('should bulk delete scans successfully', async () => {
+      // Mock service response
+      vi.mocked(scanService.bulkDeleteScans).mockResolvedValue({
+        deleted: 2,
+        failed: [],
+      });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/scans/bulk',
+        payload: {
+          scanIds: ['scan_abc123', 'scan_xyz789'],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const json = response.json();
+      expect(json.success).toBe(true);
+      expect(json.data).toEqual({
+        deleted: 2,
+        failed: [],
+      });
+
+      expect(scanService.bulkDeleteScans).toHaveBeenCalledWith(
+        ['scan_abc123', 'scan_xyz789'],
+        'session-123'
+      );
+    });
+
+    it('should handle partial failures', async () => {
+      // Mock service response with partial failure
+      vi.mocked(scanService.bulkDeleteScans).mockResolvedValue({
+        deleted: 1,
+        failed: [
+          {
+            scanId: 'scan_xyz789',
+            reason: 'Scan not found',
+          },
+        ],
+      });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/scans/bulk',
+        payload: {
+          scanIds: ['scan_abc123', 'scan_xyz789'],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const json = response.json();
+      expect(json.success).toBe(true);
+      expect(json.data.deleted).toBe(1);
+      expect(json.data.failed).toHaveLength(1);
+      expect(json.data.failed[0]).toEqual({
+        scanId: 'scan_xyz789',
+        reason: 'Scan not found',
+      });
+    });
+
+    it('should validate scan IDs format', async () => {
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/scans/bulk',
+        payload: {
+          scanIds: ['invalid-id', 'scan_xyz789'],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const json = response.json();
+      expect(json.success).toBe(false);
+      expect(json.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('should require at least one scan ID', async () => {
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/scans/bulk',
+        payload: {
+          scanIds: [],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const json = response.json();
+      expect(json.success).toBe(false);
+      expect(json.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('should enforce maximum 50 scans', async () => {
+      const scanIds = Array.from({ length: 51 }, (_, i) =>
+        `550e8400-e29b-41d4-a716-${String(i).padStart(12, '0')}`
+      );
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/scans/bulk',
+        payload: {
+          scanIds,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const json = response.json();
+      expect(json.success).toBe(false);
+      expect(json.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('should handle service errors', async () => {
+      // Create a proper instance of ScanServiceError
+      class ScanServiceError extends Error {
+        public readonly code: string;
+        constructor(message: string, code: string) {
+          super(message);
+          this.name = 'ScanServiceError';
+          this.code = code;
+        }
+      }
+
+      vi.mocked(scanService.bulkDeleteScans).mockRejectedValue(
+        new ScanServiceError('Delete failed', 'DELETE_FAILED')
+      );
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/scans/bulk',
+        payload: {
+          scanIds: ['scan_abc123'],
+        },
+      });
+
+      expect(response.statusCode).toBe(500);
+      const json = response.json();
+      expect(json.success).toBe(false);
+      expect(json.code).toBe('DELETE_FAILED');
+    });
+  });
+
   describe('Middleware Chain', () => {
     it('should execute middleware in correct order for POST', async () => {
       // This test verifies middleware are attached correctly

@@ -17,7 +17,7 @@ import {
 export interface AdminUser {
   id: string;
   email: string;
-  role: 'ADMIN' | 'SUPER_ADMIN';
+  role: 'admin' | 'super_admin';
   isActive: boolean;
   lastLoginAt: string | null;
 }
@@ -56,11 +56,11 @@ interface AdminUserTableProps {
  */
 function RoleBadge({ role }: { role: AdminUser['role'] }) {
   const roleConfig = {
-    ADMIN: {
+    admin: {
       label: 'Admin',
       className: 'bg-blue-100 text-blue-800',
     },
-    SUPER_ADMIN: {
+    super_admin: {
       label: 'Super Admin',
       className: 'bg-purple-100 text-purple-800',
     },

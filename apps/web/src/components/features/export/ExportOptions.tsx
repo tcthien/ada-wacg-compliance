@@ -1,59 +1,99 @@
 'use client';
 
-import { useExport } from '@/hooks/useExport';
+import type { ReportInfo } from '@/lib/api';
 
-interface ExportOptionsProps {
-  scanId: string;
-  onClose: () => void;
+interface ReportStatus {
+  pdf: ReportInfo | null;
+  json: ReportInfo | null;
 }
 
-export function ExportOptions({ scanId, onClose }: ExportOptionsProps) {
-  const { exportReport, loading, error } = useExport();
+interface ExportOptionsProps {
+  reportStatus?: ReportStatus | null;
+  onDownload: (format: 'pdf' | 'json', url: string) => void;
+  onGenerate: (format: 'pdf' | 'json') => void;
+  disabled?: boolean;
+}
 
-  const handleExport = async (format: 'pdf' | 'json') => {
-    await exportReport(scanId, format);
-    onClose();
+export function ExportOptions({
+  reportStatus,
+  onDownload,
+  onGenerate,
+  disabled = false,
+}: ExportOptionsProps) {
+  const pdfReport = reportStatus?.pdf;
+  const jsonReport = reportStatus?.json;
+
+  const handlePdfClick = () => {
+    if (pdfReport?.url) {
+      onDownload('pdf', pdfReport.url);
+    } else {
+      onGenerate('pdf');
+    }
+  };
+
+  const handleJsonClick = () => {
+    if (jsonReport?.url) {
+      onDownload('json', jsonReport.url);
+    } else {
+      onGenerate('json');
+    }
+  };
+
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return '';
+    const kb = bytes / 1024;
+    if (kb < 1024) {
+      return `${Math.round(kb)} KB`;
+    }
+    const mb = kb / 1024;
+    return `${mb.toFixed(1)} MB`;
   };
 
   return (
-    <div className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-20">
+    <div className="absolute right-0 mt-2 w-64 bg-white border rounded-lg shadow-lg z-20">
       <div className="p-2">
+        {/* PDF Option */}
         <button
-          onClick={() => handleExport('pdf')}
-          disabled={loading}
-          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-100 rounded disabled:opacity-50"
+          onClick={handlePdfClick}
+          disabled={disabled}
+          className="w-full flex items-start gap-3 px-3 py-2 text-left hover:bg-gray-100 rounded disabled:opacity-50 transition-colors"
         >
-          <PdfIcon className="w-5 h-5 text-red-600" />
-          <div>
-            <div className="font-medium">PDF Report</div>
-            <div className="text-xs text-muted-foreground">Formatted document</div>
+          <PdfIcon className="w-5 h-5 text-red-600 mt-0.5" />
+          <div className="flex-1">
+            <div className="font-medium text-sm">PDF Report</div>
+            {pdfReport?.url ? (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Ready • {formatFileSize(pdfReport.fileSizeBytes)} • Download ↓
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Generate formatted document
+              </div>
+            )}
           </div>
         </button>
 
+        {/* JSON Option */}
         <button
-          onClick={() => handleExport('json')}
-          disabled={loading}
-          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-100 rounded disabled:opacity-50"
+          onClick={handleJsonClick}
+          disabled={disabled}
+          className="w-full flex items-start gap-3 px-3 py-2 text-left hover:bg-gray-100 rounded disabled:opacity-50 transition-colors"
         >
-          <JsonIcon className="w-5 h-5 text-blue-600" />
-          <div>
-            <div className="font-medium">JSON Data</div>
-            <div className="text-xs text-muted-foreground">Raw scan data</div>
+          <JsonIcon className="w-5 h-5 text-blue-600 mt-0.5" />
+          <div className="flex-1">
+            <div className="font-medium text-sm">JSON Data</div>
+            {jsonReport?.url ? (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Ready • {formatFileSize(jsonReport.fileSizeBytes)} • Download ↓
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Generate raw scan data
+              </div>
+            )}
           </div>
         </button>
       </div>
-
-      {loading && (
-        <div className="px-3 py-2 text-sm text-center text-muted-foreground border-t">
-          Generating report...
-        </div>
-      )}
-
-      {error && (
-        <div className="px-3 py-2 text-sm text-center text-red-600 border-t">
-          {error}
-        </div>
-      )}
     </div>
   );
 }

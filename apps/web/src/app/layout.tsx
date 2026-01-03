@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { AppProviders } from './providers';
+import { AnalyticsProvider } from '@/components/features/analytics';
+import { CookieConsent } from '@/components/features/privacy/CookieConsent';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,7 +19,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <AppProviders>
+          <AnalyticsProvider>
+            {children}
+            <CookieConsent />
+          </AnalyticsProvider>
+        </AppProviders>
+      </body>
     </html>
   );
 }

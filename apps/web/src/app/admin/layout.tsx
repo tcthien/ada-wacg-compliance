@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuthStore } from '@/stores/admin-auth';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { AdminHeader } from '@/components/admin/AdminHeader';
+import { AdminProviders } from './providers';
 
 /**
  * Admin layout wrapper
@@ -57,7 +58,7 @@ export default function AdminLayout({
 
   // Login page doesn't need auth wrapper
   if (isLoginPage) {
-    return <>{children}</>;
+    return <AdminProviders>{children}</AdminProviders>;
   }
 
   // Show loading state while checking authentication
@@ -74,18 +75,20 @@ export default function AdminLayout({
 
   // Authenticated: Render admin shell with sidebar and header
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Admin Sidebar - Task 33 */}
-      <AdminSidebar />
+    <AdminProviders>
+      <div className="flex min-h-screen bg-gray-100">
+        {/* Admin Sidebar - Task 33 */}
+        <AdminSidebar />
 
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col">
-        {/* Admin Header - Task 34 */}
-        <AdminHeader />
+        {/* Main content area */}
+        <div className="flex flex-1 flex-col">
+          {/* Admin Header - Task 34 */}
+          <AdminHeader />
 
-        {/* Page content */}
-        <main className="flex-1 p-6">{children}</main>
+          {/* Page content */}
+          <main className="flex-1 p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </AdminProviders>
   );
 }

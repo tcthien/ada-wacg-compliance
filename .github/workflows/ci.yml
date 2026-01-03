@@ -289,7 +289,7 @@ jobs:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/adashield_test?schema=public
           REDIS_URL: redis://localhost:6379/0
-          NEXT_PUBLIC_API_URL: http://localhost:3001
+          NEXT_PUBLIC_API_URL: http://localhost:3080
           NEXT_PUBLIC_RECAPTCHA_SITE_KEY: test-site-key
 
       - name: Start API server
@@ -301,13 +301,13 @@ jobs:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/adashield_test?schema=public
           REDIS_URL: redis://localhost:6379/0
-          API_PORT: 3001
+          API_PORT: 3080
           COOKIE_SECRET: test-cookie-secret-for-ci-only
           CORS_ORIGIN: http://localhost:3000
 
       - name: Wait for API to be ready
         run: |
-          timeout 60 bash -c 'until curl -f http://localhost:3001/api/v1/health; do sleep 2; done'
+          timeout 60 bash -c 'until curl -f http://localhost:3080/api/v1/health; do sleep 2; done'
 
       - name: Start web application
         run: |
@@ -317,7 +317,7 @@ jobs:
         env:
           NODE_ENV: test
           PORT: 3000
-          NEXT_PUBLIC_API_URL: http://localhost:3001
+          NEXT_PUBLIC_API_URL: http://localhost:3080
 
       - name: Wait for web app to be ready
         run: |

@@ -203,6 +203,8 @@ export interface CreateScanInput extends CreateScanRequest {
   guestSessionId?: string;
   /** User ID if creating as authenticated user */
   userId?: string;
+  /** Whether AI-enhanced analysis is enabled for this scan */
+  aiEnabled?: boolean;
 }
 
 /**
@@ -226,3 +228,100 @@ export interface UpdateScanInput {
  * Re-export core scan type for convenience
  */
 export type { Scan };
+
+/**
+ * AI status type for tracking AI enhancement processing state
+ *
+ * @remarks
+ * Matches the Prisma AiStatus enum for consistency
+ */
+export type AiStatus = 'PENDING' | 'DOWNLOADED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+
+/**
+ * AI-specific scan data
+ *
+ * Contains all AI-enhanced fields for a scan request with AI analysis.
+ * Used for returning AI scan details in API responses.
+ *
+ * @example
+ * ```ts
+ * const aiData: AiScanData = {
+ *   aiEnabled: true,
+ *   aiStatus: 'COMPLETED',
+ *   aiSummary: 'Executive summary of accessibility issues...',
+ *   aiRemediationPlan: 'Prioritized fix roadmap...',
+ *   aiProcessedAt: new Date(),
+ *   aiInputTokens: 1500,
+ *   aiOutputTokens: 2000,
+ *   aiTotalTokens: 3500,
+ *   aiModel: 'claude-sonnet-4-5-20250929',
+ *   aiProcessingTime: 45
+ * };
+ * ```
+ */
+export interface AiScanData {
+  /** Whether AI analysis was requested for this scan */
+  aiEnabled: boolean;
+  /** Current AI processing status */
+  aiStatus?: AiStatus | null;
+  /** AI-generated executive summary (2-3 paragraphs) */
+  aiSummary?: string | null;
+  /** AI-generated prioritized remediation plan with time estimates */
+  aiRemediationPlan?: string | null;
+  /** Timestamp when AI processing completed */
+  aiProcessedAt?: Date | null;
+  /** Number of tokens used in the AI prompt (input) */
+  aiInputTokens?: number | null;
+  /** Number of tokens used in the AI response (output) */
+  aiOutputTokens?: number | null;
+  /** Total tokens consumed (input + output) */
+  aiTotalTokens?: number | null;
+  /** AI model identifier used for analysis */
+  aiModel?: string | null;
+  /** Processing time in seconds */
+  aiProcessingTime?: number | null;
+}
+
+/**
+ * Scan response with complete AI enhancement data
+ *
+ * Extends ScanResponse to include all AI-related fields for scans with AI enabled.
+ * Used when returning full scan details including AI analysis status and results.
+ *
+ * @example
+ * ```ts
+ * const scanWithAi: ScanWithAiResult = {
+ *   id: 'scan_abc123',
+ *   url: 'https://example.com',
+ *   status: 'COMPLETED',
+ *   wcagLevel: 'AA',
+ *   aiEnabled: true,
+ *   aiStatus: 'COMPLETED',
+ *   aiSummary: 'Your website has 12 accessibility issues...',
+ *   aiRemediationPlan: 'Phase 1: Fix critical issues (2 hours)...',
+ *   aiTotalTokens: 3500,
+ *   aiModel: 'claude-sonnet-4-5-20250929',
+ *   createdAt: new Date(),
+ *   completedAt: new Date()
+ * };
+ * ```
+ */
+export interface ScanWithAiResult extends ScanResponse, AiScanData {}
+
+/**
+ * Type guard to check if a scan has AI enhancement enabled
+ *
+ * @param scan - Scan object to check
+ * @returns True if scan has AI enabled
+ *
+ * @example
+ * ```ts
+ * if (hasAiEnabled(scan)) {
+ *   // TypeScript knows scan has aiEnabled = true
+ *   console.log(`AI status: ${scan.aiStatus}`);
+ * }
+ * ```
+ */
+export function hasAiEnabled(scan: Scan | ScanResponse): scan is ScanWithAiResult {
+  return 'aiEnabled' in scan && scan.aiEnabled === true;
+}

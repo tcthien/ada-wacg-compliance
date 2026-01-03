@@ -162,6 +162,36 @@ export async function closeRedisConnection(): Promise<void> {
 }
 
 /**
+ * Get BullMQ-compatible Redis connection options
+ * BullMQ requires maxRetriesPerRequest: null for blocking operations
+ */
+export function getBullMQConnection(): RedisOptions & { host: string; port: number } {
+  const redisUrl = env.REDIS_URL;
+
+  // Parse URL if provided
+  if (redisUrl) {
+    const url = new URL(redisUrl);
+    return {
+      host: url.hostname,
+      port: parseInt(url.port) || 6379,
+      password: url.password || undefined,
+      db: parseInt(url.pathname.slice(1)) || 0,
+      maxRetriesPerRequest: null, // Required by BullMQ for blocking operations
+      enableReadyCheck: false,
+    };
+  }
+
+  // Default localhost configuration
+  return {
+    host: 'localhost',
+    port: 6379,
+    db: 0,
+    maxRetriesPerRequest: null, // Required by BullMQ for blocking operations
+    enableReadyCheck: false,
+  };
+}
+
+/**
  * Export default Redis client getter
  */
 export default getRedisClient;

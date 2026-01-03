@@ -231,26 +231,30 @@ export function ScanConsole({
                 height: `${virtualizer.getTotalSize()}px`,
               }}
             >
-              {virtualizer.getVirtualItems().map((virtualItem) => (
-                <div
-                  key={virtualItem.key}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
-                >
-                  <LogEntry
-                    event={displayEvents[virtualItem.index]}
-                    isAdmin={false}
-                    showMetadata={false}
-                  />
-                </div>
-              ))}
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const event = displayEvents[virtualItem.index];
+                if (!event) return null;
+                return (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    <LogEntry
+                      event={event}
+                      isAdmin={false}
+                      showMetadata={false}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -283,7 +287,7 @@ export function ScanConsole({
                 <>
                   <span className="text-gray-600">•</span>
                   <span className="text-gray-500 truncate max-w-md">
-                    {displayEvents[displayEvents.length - 1].message}
+                    {displayEvents[displayEvents.length - 1]?.message}
                   </span>
                 </>
               )}

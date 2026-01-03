@@ -71,7 +71,7 @@ The development setup includes:
 - PostgreSQL on `localhost:5432`
 - Redis on `localhost:6379`
 - MinIO on `localhost:9000` (API) and `localhost:9001` (Console)
-- API on `http://localhost:3001`
+- API on `http://localhost:3080`
 - Web on `http://localhost:3000`
 
 **Development features:**
@@ -105,9 +105,9 @@ docker-compose exec api pnpm prisma:seed
 ### 5. Access Services
 
 - **Web Frontend**: http://localhost:3000
-- **API Server**: http://localhost:3001
-- **API Health**: http://localhost:3001/api/v1/health
-- **BullMQ Dashboard**: http://localhost:3001/api/v1/admin/queues
+- **API Server**: http://localhost:3080
+- **API Health**: http://localhost:3080/api/v1/health
+- **BullMQ Dashboard**: http://localhost:3080/api/v1/admin/queues
 - **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
 
 ## Local Development (Without Docker)
@@ -295,7 +295,7 @@ See `.env.example` for all available configuration options. Key variables:
 - `S3_BUCKET`: Bucket name
 
 ### API
-- `API_PORT`: API server port (default: 3001)
+- `API_PORT`: API server port (default: 3080)
 - `COOKIE_SECRET`: Session cookie secret
 - `CORS_ORIGIN`: Allowed CORS origin
 
@@ -315,7 +315,7 @@ If you have port conflicts, update the ports in `.env`:
 
 ```bash
 API_PORT=3002
-WEB_PORT=3001
+WEB_PORT=3080
 POSTGRES_PORT=5433
 REDIS_PORT=6380
 MINIO_PORT=9001
@@ -345,7 +345,7 @@ docker-compose logs -f worker
 docker-compose exec redis redis-cli ping
 
 # Verify queue in BullMQ Dashboard
-# http://localhost:3001/api/v1/admin/queues
+# http://localhost:3080/api/v1/admin/queues
 ```
 
 ### Clean Restart

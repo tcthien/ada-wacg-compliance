@@ -51,6 +51,12 @@ export function loadRecaptchaScript(): Promise<void> {
  * @returns reCAPTCHA token for backend verification
  */
 export async function executeRecaptcha(action: string): Promise<string> {
+  // Skip reCAPTCHA in local development environment
+  if (env.appEnv === 'local') {
+    console.info('reCAPTCHA skipped in local environment (APP_ENV=local)');
+    return 'local-dev-bypass-token';
+  }
+
   if (!SITE_KEY) {
     console.warn(
       'reCAPTCHA site key not configured, returning empty token. ' +

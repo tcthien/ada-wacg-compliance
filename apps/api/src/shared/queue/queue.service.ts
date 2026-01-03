@@ -10,7 +10,7 @@ import { scanPageQueue, generateReportQueue, sendEmailQueue } from './queues.js'
 import type {
   ScanJobData,
   ReportJobData,
-  EmailJobData,
+  TemplateEmailJobData,
   WCAGLevel,
   ReportFormat,
   JobOptionsWithMetadata,
@@ -65,7 +65,7 @@ export async function addScanJob(
   scanId: string,
   url: string,
   wcagLevel: WCAGLevel = 'AA',
-  options?: JobOptionsWithMetadata & { userId?: string; sessionId?: string }
+  options?: JobOptionsWithMetadata & { userId?: string; sessionId?: string; email?: string }
 ): Promise<string> {
   try {
     // Validate inputs
@@ -86,7 +86,7 @@ export async function addScanJob(
       throw new Error('url must be a valid URL');
     }
 
-    const { userId, sessionId, ...jobOptions } = options || {};
+    const { userId, sessionId, email, ...jobOptions } = options || {};
 
     const jobData: ScanJobData = {
       scanId,
@@ -94,6 +94,7 @@ export async function addScanJob(
       wcagLevel,
       ...(userId && { userId }),
       ...(sessionId && { sessionId }),
+      ...(email && { email }),
     };
 
     const job = await scanPageQueue.add(
@@ -192,7 +193,7 @@ export async function addEmailJob(
 
     const { subject, from, ...jobOptions } = options || {};
 
-    const jobData: EmailJobData = {
+    const jobData: TemplateEmailJobData = {
       to,
       template,
       data,
@@ -202,7 +203,7 @@ export async function addEmailJob(
 
     const job = await sendEmailQueue.add(
       `email-${template}-${Date.now()}` as string,
-      jobData,
+      jobData as unknown as Parameters<typeof sendEmailQueue.add>[1],
       toBullMQOptions(jobOptions)
     );
 

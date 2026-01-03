@@ -12,6 +12,8 @@ import {
   getScanStatus,
   getScanResult,
   listScans,
+  getAiStatus,
+  bulkDeleteScans,
   ScanServiceError,
   type CreateScanInput,
 } from './scan.service.js';
@@ -36,6 +38,16 @@ const scanIdParamSchema = z.object({
 });
 
 /**
+ * Request body schema for bulk delete
+ */
+const bulkDeleteBodySchema = z.object({
+  scanIds: z
+    .array(z.string().uuid('Invalid scan ID format'))
+    .min(1, 'At least one scan ID is required')
+    .max(50, 'Maximum 50 scans can be deleted at once'),
+});
+
+/**
  * Query parameter schema for listing scans
  */
 const listScansQuerySchema = z.object({
@@ -52,6 +64,11 @@ type ScanIdParams = z.infer<typeof scanIdParamSchema>;
  * Type for list scans query
  */
 type ListScansQuery = z.infer<typeof listScansQuerySchema>;
+
+/**
+ * Type for bulk delete body
+ */
+type BulkDeleteBody = z.infer<typeof bulkDeleteBodySchema>;
 
 /**
  * POST /api/v1/scans
@@ -211,6 +228,8 @@ async function getScanStatusHandler(
         createdAt: status.createdAt.toISOString(),
         completedAt: status.completedAt?.toISOString() ?? null,
         errorMessage: status.errorMessage,
+        aiEnabled: status.aiEnabled,
+        email: status.email ?? undefined,
       },
     });
   } catch (error) {
@@ -318,6 +337,119 @@ async function getScanResultHandler(
 }
 
 /**
+ * GET /api/v1/scans/:id/ai-status
+ *
+ * Get AI analysis status and results for a scan.
+ *
+ * Middleware chain:
+ * 1. session - Validates session
+ * 2. handler - Returns AI status
+ *
+ * @param request - Fastify request with scan ID param
+ * @param reply - Fastify reply
+ * @returns AI status and summary (if completed)
+ *
+ * @example
+ * GET /api/v1/scans/scan_abc123/ai-status
+ *
+ * Response 200:
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "scanId": "scan_abc123",
+ *     "aiEnabled": true,
+ *     "status": "COMPLETED",
+ *     "summary": "...",
+ *     "remediationPlan": "...",
+ *     "processedAt": "2025-01-01T12:00:00.000Z",
+ *     "metrics": {
+ *       "inputTokens": 1500,
+ *       "outputTokens": 2000,
+ *       "totalTokens": 3500,
+ *       "model": "claude-3-5-sonnet-20241022",
+ *       "processingTime": 3500
+ *     }
+ *   }
+ * }
+ */
+async function getAiStatusHandler(
+  request: FastifyRequest<{ Params: ScanIdParams }>,
+  reply: FastifyReply
+) {
+  try {
+    // Validate params
+    const params = scanIdParamSchema.parse(request.params);
+
+    // Get AI status
+    const aiStatus = await getAiStatus(params.id);
+
+    if (!aiStatus) {
+      return reply.code(404).send({
+        success: false,
+        error: 'Scan not found',
+        code: 'SCAN_NOT_FOUND',
+      });
+    }
+
+    // Add caching headers for polling optimization
+    // - Cache for 5 seconds if AI is still processing
+    // - Cache for 1 hour if AI is completed or failed
+    const cacheMaxAge =
+      aiStatus.status === 'COMPLETED' || aiStatus.status === 'FAILED' ? 3600 : 5;
+
+    reply.header('Cache-Control', `public, max-age=${cacheMaxAge}`);
+
+    // Build response with metrics grouped
+    const responseData: any = {
+      scanId: aiStatus.scanId,
+      aiEnabled: aiStatus.aiEnabled,
+      status: aiStatus.status,
+    };
+
+    // Only include summary/plan if completed
+    if (aiStatus.status === 'COMPLETED') {
+      responseData.summary = aiStatus.summary;
+      responseData.remediationPlan = aiStatus.remediationPlan;
+      responseData.processedAt = aiStatus.processedAt?.toISOString() ?? null;
+
+      // Include metrics if available
+      if (aiStatus.inputTokens !== null && aiStatus.outputTokens !== null) {
+        responseData.metrics = {
+          inputTokens: aiStatus.inputTokens,
+          outputTokens: aiStatus.outputTokens,
+          totalTokens: aiStatus.totalTokens,
+          model: aiStatus.model,
+          processingTime: aiStatus.processingTime,
+        };
+      }
+    }
+
+    return reply.code(200).send({
+      success: true,
+      data: responseData,
+    });
+  } catch (error) {
+    // Handle validation errors
+    if (error instanceof z.ZodError) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Invalid scan ID',
+        code: 'VALIDATION_ERROR',
+        details: error.errors,
+      });
+    }
+
+    // Handle unexpected errors
+    request.log.error(error, 'Unexpected error in getAiStatusHandler');
+    return reply.code(500).send({
+      success: false,
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR',
+    });
+  }
+}
+
+/**
  * GET /api/v1/scans
  *
  * List scans for current session with pagination.
@@ -414,6 +546,96 @@ async function listScansHandler(
 }
 
 /**
+ * DELETE /api/v1/scans/bulk
+ *
+ * Bulk delete scans for current session.
+ *
+ * Middleware chain:
+ * 1. session - Validates session
+ * 2. handler - Deletes scans in transaction
+ *
+ * @param request - Fastify request with scan IDs array
+ * @param reply - Fastify reply
+ * @returns Deletion summary
+ *
+ * @example
+ * DELETE /api/v1/scans/bulk
+ * Body: {
+ *   "scanIds": ["scan_abc123", "scan_xyz789"]
+ * }
+ *
+ * Response 200:
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "deleted": 2,
+ *     "failed": []
+ *   }
+ * }
+ */
+async function bulkDeleteScansHandler(
+  request: FastifyRequest<{ Body: BulkDeleteBody }>,
+  reply: FastifyReply
+) {
+  try {
+    // Validate request body
+    const body = bulkDeleteBodySchema.parse(request.body);
+
+    // Check session exists
+    if (!request.guestSession) {
+      return reply.code(401).send({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Valid session required',
+        code: 'SESSION_REQUIRED',
+      });
+    }
+
+    // Bulk delete scans
+    const result = await bulkDeleteScans(
+      body.scanIds,
+      request.guestSession.id
+    );
+
+    return reply.code(200).send({
+      success: true,
+      data: {
+        deleted: result.deleted,
+        failed: result.failed,
+      },
+    });
+  } catch (error) {
+    // Handle service errors (check by name property for better test compatibility)
+    if (error instanceof Error && error.name === 'ScanServiceError' && 'code' in error) {
+      const statusCode = getStatusCodeForScanError(error.code as string);
+      return reply.code(statusCode).send({
+        success: false,
+        error: error.message,
+        code: error.code,
+      });
+    }
+
+    // Handle validation errors
+    if (error instanceof z.ZodError) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Invalid request body',
+        code: 'VALIDATION_ERROR',
+        details: error.errors,
+      });
+    }
+
+    // Handle unexpected errors
+    request.log.error(error, 'Unexpected error in bulkDeleteScansHandler');
+    return reply.code(500).send({
+      success: false,
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR',
+    });
+  }
+}
+
+/**
  * Map scan service error codes to HTTP status codes
  */
 function getStatusCodeForScanError(code: string): number {
@@ -490,6 +712,16 @@ export async function registerScanRoutes(
     getScanResultHandler as any
   );
 
+  // GET /api/v1/scans/:id/ai-status - Get AI analysis status
+  // Middleware: session → handler
+  fastify.get(
+    `${prefix}/scans/:id/ai-status`,
+    {
+      preHandler: [sessionMiddleware],
+    },
+    getAiStatusHandler as any
+  );
+
   // GET /api/v1/scans - List scans for session
   // Middleware: session → handler
   fastify.get(
@@ -498,6 +730,16 @@ export async function registerScanRoutes(
       preHandler: [sessionMiddleware],
     },
     listScansHandler as any
+  );
+
+  // DELETE /api/v1/scans/bulk - Bulk delete scans
+  // Middleware: session → handler
+  fastify.delete(
+    `${prefix}/scans/bulk`,
+    {
+      preHandler: [sessionMiddleware],
+    },
+    bulkDeleteScansHandler as any
   );
 
   fastify.log.info('✅ Scan routes registered');

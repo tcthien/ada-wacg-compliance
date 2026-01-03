@@ -60,12 +60,42 @@ export COOKIE_SECRET="dev-cookie-secret-change-in-production"
 export CORS_ORIGIN="http://localhost:3000"
 export PORT="3080"
 export NEXT_PUBLIC_API_URL="http://localhost:3080"
-export S3_ENDPOINT="http://localhost:$MINIO_PORT"
-export S3_REGION="us-east-1"
-export S3_ACCESS_KEY="minioadmin"
-export S3_SECRET_KEY="minioadmin"
-export S3_BUCKET="adashield"
-export S3_FORCE_PATH_STYLE="true"
+
+# S3 Configuration (loaded from root .env or defaults to MinIO)
+# To use AWS S3: Update root .env with S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY (leave S3_ENDPOINT commented/empty)
+USE_AWS_S3=false
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    # Check if using AWS S3 (S3_ACCESS_KEY starts with AKIA = AWS credentials)
+    S3_ACCESS_KEY_ENV=$(grep -E "^S3_ACCESS_KEY=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'")
+    if [[ "$S3_ACCESS_KEY_ENV" == AKIA* ]]; then
+        USE_AWS_S3=true
+        S3_BUCKET_ENV=$(grep -E "^S3_BUCKET=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'")
+        S3_SECRET_KEY_ENV=$(grep -E "^S3_SECRET_KEY=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'")
+        S3_PUBLIC_URL_ENV=$(grep -E "^S3_PUBLIC_URL=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'")
+    fi
+fi
+
+if [ "$USE_AWS_S3" = true ]; then
+    # AWS S3 configuration (no endpoint = use AWS default)
+    export S3_ENDPOINT=""
+    export S3_REGION="us-east-1"
+    export S3_ACCESS_KEY="$S3_ACCESS_KEY_ENV"
+    export S3_SECRET_KEY="$S3_SECRET_KEY_ENV"
+    export S3_BUCKET="$S3_BUCKET_ENV"
+    export S3_FORCE_PATH_STYLE="false"
+    export S3_PUBLIC_URL="$S3_PUBLIC_URL_ENV"
+    echo "   S3: AWS S3 via Cloudflare CDN (bucket: $S3_BUCKET)"
+else
+    # MinIO configuration (local development)
+    export S3_ENDPOINT="http://localhost:$MINIO_PORT"
+    export S3_REGION="us-east-1"
+    export S3_ACCESS_KEY="minioadmin"
+    export S3_SECRET_KEY="minioadmin"
+    export S3_BUCKET="adashield"
+    export S3_FORCE_PATH_STYLE="true"
+    export S3_PUBLIC_URL=""
+    echo "   S3: MinIO (bucket: $S3_BUCKET)"
+fi
 
 # Start API
 echo "🚀 Starting API server..."

@@ -140,7 +140,7 @@ Create a `.env` file in the `apps/api` directory (see `.env.example`):
 
 ```env
 NODE_ENV=development
-PORT=3001
+PORT=3080
 HOST=0.0.0.0
 CORS_ORIGIN=http://localhost:5173
 LOG_LEVEL=info
@@ -154,7 +154,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/adashield?schema=publ
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `NODE_ENV` | Environment (development/production/test) | `development` |
-| `PORT` | Server port | `3001` |
+| `PORT` | Server port | `3080` |
 | `HOST` | Server host | `0.0.0.0` |
 | `CORS_ORIGIN` | Allowed CORS origin | `http://localhost:5173` |
 | `LOG_LEVEL` | Logging level (fatal/error/warn/info/debug/trace) | `info` |

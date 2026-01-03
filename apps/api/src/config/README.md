@@ -95,7 +95,7 @@ docker-compose down
 The `/api/v1/health` endpoint includes Redis health status:
 
 ```bash
-curl http://localhost:3001/api/v1/health
+curl http://localhost:3080/api/v1/health
 ```
 
 Response:

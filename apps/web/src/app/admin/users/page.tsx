@@ -183,7 +183,7 @@ export default function AdminUsersPage() {
 
     setEditUserId(userId);
     setEditEmail(user.email);
-    setEditRole(user.role === 'ADMIN' ? 'admin' : 'super_admin');
+    setEditRole(user.role);
     setEditError(null);
     setShowEditModal(true);
   };

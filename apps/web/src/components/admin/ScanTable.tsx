@@ -9,13 +9,15 @@ import {
   RefreshCw,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Layers,
+  ExternalLink
 } from 'lucide-react';
 
 /**
  * Sort configuration
  */
-type SortField = 'status' | 'createdAt' | 'userEmail' | 'url';
+type SortField = 'status' | 'createdAt' | 'email' | 'url';
 type SortOrder = 'asc' | 'desc';
 
 interface SortConfig {
@@ -110,6 +112,9 @@ function SkeletonRow() {
         <div className="h-4 w-64 bg-gray-200 rounded"></div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
+        <div className="h-6 w-20 bg-gray-200 rounded"></div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex gap-2">
           <div className="h-8 w-8 bg-gray-200 rounded"></div>
           <div className="h-8 w-8 bg-gray-200 rounded"></div>
@@ -125,7 +130,7 @@ function SkeletonRow() {
 function EmptyState() {
   return (
     <tr>
-      <td colSpan={5} className="px-6 py-12 text-center">
+      <td colSpan={6} className="px-6 py-12 text-center">
         <div className="flex flex-col items-center justify-center">
           <div className="text-gray-400 mb-2">
             <svg
@@ -215,9 +220,9 @@ export function ScanTable({
             aValue = new Date(a.createdAt).getTime();
             bValue = new Date(b.createdAt).getTime();
             break;
-          case 'userEmail':
-            aValue = a.userEmail.toLowerCase();
-            bValue = b.userEmail.toLowerCase();
+          case 'email':
+            aValue = a.email.toLowerCase();
+            bValue = b.email.toLowerCase();
             break;
           case 'url':
             aValue = a.url.toLowerCase();
@@ -292,11 +297,11 @@ export function ScanTable({
             <th
               scope="col"
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSort('userEmail')}
+              onClick={() => handleSort('email')}
             >
               <div className="flex items-center">
                 Email
-                <SortIcon field="userEmail" currentSort={sortConfig} />
+                <SortIcon field="email" currentSort={sortConfig} />
               </div>
             </th>
 
@@ -310,6 +315,14 @@ export function ScanTable({
                 URL
                 <SortIcon field="url" currentSort={sortConfig} />
               </div>
+            </th>
+
+            {/* Batch Column */}
+            <th
+              scope="col"
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
+              Batch
             </th>
 
             {/* Actions Column */}
@@ -352,7 +365,7 @@ export function ScanTable({
 
                 {/* Email */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {scan.userEmail}
+                  {scan.email}
                 </td>
 
                 {/* URL */}
@@ -366,6 +379,35 @@ export function ScanTable({
                   >
                     {truncateUrl(scan.url)}
                   </a>
+                </td>
+
+                {/* Batch */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  {scan.batchScanId ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                        <Layers className="h-3 w-3" />
+                        Batch
+                      </span>
+                      {scan.batchHomepageUrl && (
+                        <span className="text-gray-600 truncate max-w-[120px]" title={scan.batchHomepageUrl}>
+                          {scan.batchHomepageUrl.length > 30
+                            ? scan.batchHomepageUrl.substring(0, 30) + '...'
+                            : scan.batchHomepageUrl}
+                        </span>
+                      )}
+                      <Link
+                        href={`/admin/batches/${scan.batchScanId}`}
+                        className="inline-flex items-center justify-center p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="View batch details"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span className="sr-only">View batch</span>
+                      </Link>
+                    </div>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
                 </td>
 
                 {/* Actions */}

@@ -75,7 +75,7 @@ services:
       - minio
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 3001
+      PORT: 3080
       HOST: 0.0.0.0
       API_PREFIX: ${API_PREFIX:-/api/v1}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -90,11 +90,11 @@ services:
       S3_BUCKET: ${S3_BUCKET:-adashield}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
     ports:
-      - '${API_PORT:-3001}:3001'
+      - '${API_PORT:-3080}:3080'
     networks:
       - adashield-network
     healthcheck:
-      test: ['CMD', 'node', '-e', "require('http').get('http://localhost:3001/api/v1/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
+      test: ['CMD', 'node', '-e', "require('http').get('http://localhost:3080/api/v1/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
       interval: 30s
       timeout: 10s
       start_period: 40s
@@ -141,7 +141,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3080}
       NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY:-}
     ports:
       - '${WEB_PORT:-3000}:3000'

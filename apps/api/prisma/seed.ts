@@ -1,4 +1,4 @@
-import { PrismaClient, ScanStatus, WcagLevel, IssueImpact, ReportFormat, AdminRole } from '@prisma/client';
+import { PrismaClient, ScanStatus, WcagLevel, IssueImpact, ReportFormat, AdminRole, AiCampaignStatus, AiStatus } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
@@ -13,6 +13,8 @@ async function main() {
 
   // Clean existing data
   console.log('🧹 Cleaning existing data...');
+  await prisma.aiCampaignAudit.deleteMany();
+  await prisma.aiCampaign.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.adminUser.deleteMany();
   await prisma.report.deleteMany();
@@ -48,6 +50,43 @@ async function main() {
   });
 
   console.log('✅ Created 2 admin users');
+
+  // Create AI Campaign
+  console.log('🤖 Creating AI campaign...');
+  // Use dynamic dates relative to current time
+  const now = new Date();
+  const campaignStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Started 30 days ago
+  const campaignEnd = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // Ends 90 days from now
+
+  const aiCampaign = await prisma.aiCampaign.create({
+    data: {
+      name: 'Early Bird AI Campaign',
+      totalTokenBudget: 100000, // 100K tokens total budget
+      usedTokens: 15000, // 15K tokens used (15%)
+      reservedSlots: 0,
+      avgTokensPerScan: 100, // Average tokens per scan for slot calculation
+      status: AiCampaignStatus.ACTIVE,
+      startsAt: campaignStart,
+      endsAt: campaignEnd,
+    },
+  });
+
+  // Create audit log for campaign
+  await prisma.aiCampaignAudit.create({
+    data: {
+      campaignId: aiCampaign.id,
+      action: 'CAMPAIGN_CREATED',
+      details: {
+        name: aiCampaign.name,
+        totalTokenBudget: aiCampaign.totalTokenBudget,
+        startsAt: aiCampaign.startsAt.toISOString(),
+        endsAt: aiCampaign.endsAt?.toISOString(),
+      },
+      adminId: superAdmin.id,
+    },
+  });
+
+  console.log('✅ Created 1 AI campaign (Early Bird)');
 
   // Create GuestSessions
   console.log('👤 Creating guest sessions...');
@@ -140,6 +179,80 @@ async function main() {
   });
 
   console.log('✅ Created 5 scans (PENDING, RUNNING, COMPLETED x2, FAILED)');
+
+  // Create AI-enabled scans (Early Bird campaign)
+  console.log('🤖 Creating AI-enabled scans...');
+  const aiPendingScan = await prisma.scan.create({
+    data: {
+      guestSession: { connect: { id: activeSess.id } },
+      url: 'https://ai-test-site.com',
+      email: 'user@ai-test-site.com',
+      status: ScanStatus.COMPLETED,
+      wcagLevel: WcagLevel.AA,
+      durationMs: 5234,
+      completedAt: new Date(),
+      aiEnabled: true,
+      aiStatus: AiStatus.PENDING,
+    },
+  });
+
+  const aiProcessingScan = await prisma.scan.create({
+    data: {
+      guestSession: { connect: { id: activeSess.id } },
+      url: 'https://ai-processing-site.com',
+      email: 'admin@ai-processing-site.com',
+      status: ScanStatus.COMPLETED,
+      wcagLevel: WcagLevel.AA,
+      durationMs: 4876,
+      completedAt: new Date(),
+      aiEnabled: true,
+      aiStatus: AiStatus.PROCESSING,
+    },
+  });
+
+  const aiCompletedScan = await prisma.scan.create({
+    data: {
+      guestSession: { connect: { id: activeSess.id } },
+      url: 'https://ai-completed-site.com',
+      email: 'owner@ai-completed-site.com',
+      status: ScanStatus.COMPLETED,
+      wcagLevel: WcagLevel.AA,
+      durationMs: 3921,
+      completedAt: new Date(),
+      aiEnabled: true,
+      aiStatus: AiStatus.COMPLETED,
+      aiInputTokens: 85,
+      aiOutputTokens: 120,
+      aiTotalTokens: 205,
+      aiSummary: 'This website has moderate accessibility issues that should be addressed. Priority areas include image alt text, color contrast, and form labels.',
+      aiRemediationPlan: JSON.stringify({
+        priority: 'medium',
+        steps: [
+          'Add descriptive alt text to all informative images',
+          'Increase contrast ratio to at least 4.5:1',
+          'Associate labels with form inputs using for/id attributes'
+        ]
+      }),
+      aiProcessedAt: new Date(),
+    },
+  });
+
+  const aiFailedScan = await prisma.scan.create({
+    data: {
+      guestSession: { connect: { id: activeSess.id } },
+      url: 'https://ai-failed-site.com',
+      email: 'user@ai-failed-site.com',
+      status: ScanStatus.COMPLETED,
+      wcagLevel: WcagLevel.AA,
+      durationMs: 2543,
+      completedAt: new Date(),
+      aiEnabled: true,
+      aiStatus: AiStatus.FAILED,
+      // AI processing failed - error details would be logged separately
+    },
+  });
+
+  console.log('✅ Created 4 AI-enabled scans (PENDING, PROCESSING, COMPLETED, FAILED)');
 
   // Create ScanResults for completed scans
   console.log('📊 Creating scan results...');
@@ -354,14 +467,18 @@ async function main() {
   console.log('✨ Seed completed successfully!');
   console.log('\nSummary:');
   console.log('- 2 Admin Users (SUPER_ADMIN, ADMIN)');
+  console.log('- 1 AI Campaign (Early Bird - ACTIVE)');
   console.log('- 3 Guest Sessions (active, expired, anonymized)');
-  console.log('- 5 Scans (PENDING, RUNNING, COMPLETED x2, FAILED)');
+  console.log('- 5 Regular Scans (PENDING, RUNNING, COMPLETED x2, FAILED)');
+  console.log('- 4 AI-enabled Scans (PENDING, PROCESSING, COMPLETED, FAILED)');
   console.log('- 2 Scan Results');
   console.log('- 8 Issues (various impacts and WCAG criteria)');
   console.log('- 2 Reports (PDF, JSON)');
   console.log('\n📧 Admin Credentials:');
   console.log('  Super Admin: superadmin@adashield.dev / superadmin123');
   console.log('  Admin: admin@adashield.dev / admin123');
+  console.log('\n🤖 AI Campaign:');
+  console.log('  Early Bird: 100K tokens, 15% used, 850 slots remaining');
 }
 
 main()

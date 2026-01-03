@@ -39,9 +39,10 @@ export const IssueImpactSchema = z.enum(
  *
  * Validates:
  * - URL format and protocol (HTTP/HTTPS only)
- * - Email format (optional)
+ * - Email format (optional, but required when AI validation is enabled)
  * - WCAG conformance level
  * - reCAPTCHA token for spam prevention
+ * - AI validation flag (optional)
  *
  * @example
  * ```ts
@@ -49,66 +50,89 @@ export const IssueImpactSchema = z.enum(
  *   url: 'https://example.com',
  *   email: 'user@example.com',
  *   wcagLevel: 'AA',
- *   recaptchaToken: 'abc123...'
+ *   recaptchaToken: 'abc123...',
+ *   aiEnabled: true
  * };
  * CreateScanRequestSchema.parse(request);
  * ```
  */
-export const CreateScanRequestSchema = z.object({
-  /**
-   * Target URL to scan for accessibility issues
-   * Must be a valid HTTP or HTTPS URL
-   */
-  url: z
-    .string({
-      required_error: 'URL is required',
-      invalid_type_error: 'URL must be a string',
-    })
-    .url('Invalid URL format')
-    .refine(
-      (url) => {
-        try {
-          const parsed = new URL(url);
-          return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-        } catch {
-          return false;
-        }
-      },
-      { message: 'URL must use HTTP or HTTPS protocol' },
-    )
-    .transform((url) => {
-      // Normalize URL by trimming whitespace
-      return url.trim();
-    }),
+export const CreateScanRequestSchema = z
+  .object({
+    /**
+     * Target URL to scan for accessibility issues
+     * Must be a valid HTTP or HTTPS URL
+     */
+    url: z
+      .string({
+        required_error: 'URL is required',
+        invalid_type_error: 'URL must be a string',
+      })
+      .url('Invalid URL format')
+      .refine(
+        (url) => {
+          try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+          } catch {
+            return false;
+          }
+        },
+        { message: 'URL must use HTTP or HTTPS protocol' },
+      )
+      .transform((url) => {
+        // Normalize URL by trimming whitespace
+        return url.trim();
+      }),
 
-  /**
-   * Email address for scan report delivery
-   * Optional - if not provided, user must check status manually
-   */
-  email: z
-    .string()
-    .transform((email) => {
-      // Normalize email by trimming and lowercasing
-      return email.trim().toLowerCase();
-    })
-    .pipe(z.string().email('Invalid email format'))
-    .optional(),
+    /**
+     * Email address for scan report delivery
+     * Optional - if not provided, user must check status manually
+     * Required when aiEnabled is true
+     */
+    email: z
+      .string()
+      .transform((email) => {
+        // Normalize email by trimming and lowercasing
+        return email.trim().toLowerCase();
+      })
+      .pipe(z.string().email('Invalid email format'))
+      .optional(),
 
-  /**
-   * Target WCAG conformance level for the scan
-   * Defaults to AA (most common requirement)
-   */
-  wcagLevel: WcagLevelSchema.default('AA'),
+    /**
+     * Target WCAG conformance level for the scan
+     * Defaults to AA (most common requirement)
+     */
+    wcagLevel: WcagLevelSchema.default('AA'),
 
-  /**
-   * reCAPTCHA v3 token for spam prevention
-   * Required for all guest scan requests
-   */
-  recaptchaToken: z.string({
-    required_error: 'reCAPTCHA token is required',
-    invalid_type_error: 'reCAPTCHA token must be a string',
-  }),
-});
+    /**
+     * reCAPTCHA v3 token for spam prevention
+     * Required when APP_ENV=prod, optional when APP_ENV=local
+     */
+    recaptchaToken: z
+      .string({
+        invalid_type_error: 'reCAPTCHA token must be a string',
+      })
+      .optional(),
+
+    /**
+     * Enable AI-powered validation for scan results
+     * When enabled, email is required for report delivery
+     */
+    aiEnabled: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      // Email is required when AI validation is enabled
+      if (data.aiEnabled === true && !data.email) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Email is required when AI validation is enabled',
+      path: ['email'],
+    },
+  );
 
 /**
  * Schema for scan response data

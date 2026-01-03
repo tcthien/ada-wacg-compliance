@@ -44,14 +44,13 @@ import {
 export async function generatePdfReport(result: FormattedResult): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: SPACING.margin, size: 'LETTER' });
+      // Enable bufferPages to allow adding footers after all content is placed
+      const doc = new PDFDocument({ margin: SPACING.margin, size: 'LETTER', bufferPages: true });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-
-      let pageNumber = 1;
 
       // Page 1: Header and Summary
       addReportHeader(doc, result);
@@ -60,19 +59,18 @@ export async function generatePdfReport(result: FormattedResult): Promise<Buffer
       addSummarySection(doc, result);
       addDivider(doc);
       addCoverageDisclaimer(doc, result.metadata.coverageNote);
-      addFooter(doc, pageNumber);
 
       // Page 2+: Issues by severity
       doc.addPage();
-      pageNumber++;
       addIssuesSection(doc, result);
-      addFooter(doc, pageNumber);
 
-      // Add page numbers to any additional pages
-      doc.on('pageAdded', () => {
-        pageNumber++;
-        addFooter(doc, pageNumber);
-      });
+      // Now add footers to all pages using bufferedPageRange
+      // This allows us to go back and add footers after all content is placed
+      const range = doc.bufferedPageRange();
+      for (let i = range.start; i < range.start + range.count; i++) {
+        doc.switchToPage(i);
+        addFooter(doc, i + 1);
+      }
 
       // Finalize PDF
       doc.end();

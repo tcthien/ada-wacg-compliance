@@ -186,7 +186,7 @@ describe('PDF Generator', () => {
       const buffer = await generatePdfReport(result);
 
       expect(buffer).toBeInstanceOf(Buffer);
-      expect(buffer.length).toBeGreaterThan(3000);
+      expect(buffer.length).toBeGreaterThan(2000);
       expect(buffer.toString('utf8', 0, 4)).toBe('%PDF');
     });
 
@@ -195,7 +195,7 @@ describe('PDF Generator', () => {
       const buffer = await generatePdfReport(result);
 
       expect(buffer).toBeInstanceOf(Buffer);
-      expect(buffer.length).toBeGreaterThan(3000);
+      expect(buffer.length).toBeGreaterThan(2000);
       expect(buffer.toString('utf8', 0, 4)).toBe('%PDF');
     });
 
@@ -303,33 +303,91 @@ describe('PDF Generator', () => {
       const buffer = await generatePdfReport(result);
 
       expect(buffer).toBeInstanceOf(Buffer);
-      expect(buffer.length).toBeGreaterThan(3000);
+      expect(buffer.length).toBeGreaterThan(2000);
       expect(buffer.toString('utf8', 0, 4)).toBe('%PDF');
+    });
+
+    it('should not generate blank pages', async () => {
+      // Test with 3 issues (similar to real-world scenario that had blank pages)
+      const issues: EnrichedIssue[] = [
+        createMockIssue({ id: 'issue-1', impact: 'SERIOUS', ruleId: 'color-contrast' }),
+        createMockIssue({ id: 'issue-2', impact: 'MODERATE', ruleId: 'image-alt' }),
+        createMockIssue({ id: 'issue-3', impact: 'MINOR', ruleId: 'link-name' }),
+      ];
+
+      const result = createMockResult({
+        summary: {
+          totalIssues: 3,
+          critical: 0,
+          serious: 1,
+          moderate: 1,
+          minor: 1,
+          passed: 45,
+        },
+        issuesByImpact: {
+          critical: [],
+          serious: issues.filter((i) => i.impact === 'SERIOUS'),
+          moderate: issues.filter((i) => i.impact === 'MODERATE'),
+          minor: issues.filter((i) => i.impact === 'MINOR'),
+        },
+      });
+
+      const buffer = await generatePdfReport(result);
+
+      expect(buffer).toBeInstanceOf(Buffer);
+      expect(buffer.toString('utf8', 0, 4)).toBe('%PDF');
+
+      // Count pages by looking for page object references in PDF
+      const pdfContent = buffer.toString('binary');
+      const pageMatches = pdfContent.match(/\/Type\s*\/Page[^s]/g) || [];
+
+      // Should have 2-3 pages max (summary + issues), not 7 like before
+      // Before the fix: 7 pages with many blank pages due to footer text causing page breaks
+      // After the fix: 2-3 pages depending on content length (no blank pages)
+      expect(pageMatches.length).toBeLessThanOrEqual(3);
+      expect(pageMatches.length).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('uploadToS3', () => {
-    it('should return a presigned URL (stub)', async () => {
+    it('should upload to S3 and return URL', async () => {
+      // Mock the S3 storage module
+      vi.doMock('@adashield/core/storage', () => ({
+        uploadToS3: vi.fn().mockResolvedValue('https://s3.example.com/reports/test-scan-123.pdf'),
+        CONTENT_TYPES: { pdf: 'application/pdf' },
+        ensureBucketExists: vi.fn().mockResolvedValue(undefined),
+      }));
+
+      // Re-import to get mocked version
+      const { uploadToS3: mockedUploadToS3 } = await import('./pdf-generator.js');
+
       const buffer = Buffer.from('test pdf content');
       const key = 'reports/test-scan-123.pdf';
 
-      const url = await uploadToS3(buffer, key);
+      const url = await mockedUploadToS3(buffer, key);
 
-      expect(url).toBe('https://s3.example.com/reports/test-scan-123.pdf');
+      expect(url).toContain('reports/test-scan-123.pdf');
     });
 
-    it('should log the upload intention', async () => {
+    it('should log the upload progress', async () => {
       const consoleSpy = vi.spyOn(console, 'log');
+
+      // Mock the S3 storage module
+      vi.doMock('@adashield/core/storage', () => ({
+        uploadToS3: vi.fn().mockResolvedValue('https://s3.example.com/reports/test.pdf'),
+        CONTENT_TYPES: { pdf: 'application/pdf' },
+        ensureBucketExists: vi.fn().mockResolvedValue(undefined),
+      }));
+
+      const { uploadToS3: mockedUploadToS3 } = await import('./pdf-generator.js');
+
       const buffer = Buffer.from('test pdf content');
       const key = 'reports/test-scan-456.pdf';
 
-      await uploadToS3(buffer, key);
+      await mockedUploadToS3(buffer, key);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Would upload')
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('reports/test-scan-456.pdf')
+        expect.stringContaining('[PDF-Generator]')
       );
 
       consoleSpy.mockRestore();
@@ -338,20 +396,39 @@ describe('PDF Generator', () => {
 
   describe('generateAndUploadReport', () => {
     it('should generate PDF and upload to S3', async () => {
+      // Mock the S3 storage module
+      vi.doMock('@adashield/core/storage', () => ({
+        uploadToS3: vi.fn().mockResolvedValue('https://s3.example.com/reports/test-scan-789.pdf'),
+        CONTENT_TYPES: { pdf: 'application/pdf' },
+        ensureBucketExists: vi.fn().mockResolvedValue(undefined),
+      }));
+
+      const { generateAndUploadReport: mockedGenerateAndUpload } = await import('./pdf-generator.js');
+
       const result = createMockResult({
         scanId: 'test-scan-789',
       });
 
-      const url = await generateAndUploadReport(result, 'test-scan-789');
+      const url = await mockedGenerateAndUpload(result, 'test-scan-789');
 
-      expect(url).toBe('https://s3.example.com/reports/test-scan-789.pdf');
+      expect(url).toContain('reports/test-scan-789.pdf');
     });
 
     it('should use correct S3 key format', async () => {
       const consoleSpy = vi.spyOn(console, 'log');
+
+      // Mock the S3 storage module
+      vi.doMock('@adashield/core/storage', () => ({
+        uploadToS3: vi.fn().mockResolvedValue('https://s3.example.com/reports/my-scan-id.pdf'),
+        CONTENT_TYPES: { pdf: 'application/pdf' },
+        ensureBucketExists: vi.fn().mockResolvedValue(undefined),
+      }));
+
+      const { generateAndUploadReport: mockedGenerateAndUpload } = await import('./pdf-generator.js');
+
       const result = createMockResult();
 
-      await generateAndUploadReport(result, 'my-scan-id');
+      await mockedGenerateAndUpload(result, 'my-scan-id');
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('reports/my-scan-id.pdf')

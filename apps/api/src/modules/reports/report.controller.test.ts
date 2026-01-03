@@ -37,6 +37,7 @@ vi.mock('./report.service.js', async () => {
   return {
     ...actual,
     getOrGenerateReport: vi.fn(),
+    getReportStatus: vi.fn(),
   };
 });
 
@@ -320,6 +321,205 @@ describe('Report Controller', () => {
         'json',
         validSessionId
       );
+    });
+  });
+
+  describe('GET /api/v1/scans/:scanId/reports', () => {
+    const validScanId = '550e8400-e29b-41d4-a716-446655440000';
+    const validSessionId = '660e8400-e29b-41d4-a716-446655440000';
+
+    it('should return 200 with report status for both formats', async () => {
+      // Mock service to return status with both reports
+      vi.mocked(reportService.getReportStatus).mockResolvedValueOnce({
+        scanId: validScanId,
+        scanStatus: 'COMPLETED',
+        reports: {
+          pdf: {
+            exists: true,
+            url: 'https://s3.example.com/report.pdf?signed=true',
+            createdAt: '2025-12-28T10:00:00.000Z',
+            fileSizeBytes: 204800,
+            expiresAt: '2025-12-28T11:00:00.000Z',
+          },
+          json: {
+            exists: true,
+            url: 'https://s3.example.com/report.json?signed=true',
+            createdAt: '2025-12-28T10:00:00.000Z',
+            fileSizeBytes: 51200,
+            expiresAt: '2025-12-28T11:00:00.000Z',
+          },
+        },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/scans/${validScanId}/reports`,
+        headers: {
+          'x-test-session-id': validSessionId,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body).toEqual({
+        success: true,
+        data: {
+          scanId: validScanId,
+          scanStatus: 'COMPLETED',
+          reports: {
+            pdf: {
+              exists: true,
+              url: 'https://s3.example.com/report.pdf?signed=true',
+              createdAt: '2025-12-28T10:00:00.000Z',
+              fileSizeBytes: 204800,
+              expiresAt: '2025-12-28T11:00:00.000Z',
+            },
+            json: {
+              exists: true,
+              url: 'https://s3.example.com/report.json?signed=true',
+              createdAt: '2025-12-28T10:00:00.000Z',
+              fileSizeBytes: 51200,
+              expiresAt: '2025-12-28T11:00:00.000Z',
+            },
+          },
+        },
+      });
+
+      expect(reportService.getReportStatus).toHaveBeenCalledWith(
+        validScanId,
+        validSessionId
+      );
+    });
+
+    it('should return 200 with null reports when no reports exist', async () => {
+      // Mock service to return status with no reports
+      vi.mocked(reportService.getReportStatus).mockResolvedValueOnce({
+        scanId: validScanId,
+        scanStatus: 'COMPLETED',
+        reports: {
+          pdf: null,
+          json: null,
+        },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/scans/${validScanId}/reports`,
+        headers: {
+          'x-test-session-id': validSessionId,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.data.reports.pdf).toBeNull();
+      expect(body.data.reports.json).toBeNull();
+    });
+
+    it('should return 403 when scan does not belong to session', async () => {
+      // Mock service to throw FORBIDDEN error
+      vi.mocked(reportService.getReportStatus).mockRejectedValueOnce(
+        new ReportServiceError('Scan does not belong to session', 'FORBIDDEN')
+      );
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/scans/${validScanId}/reports`,
+        headers: {
+          'x-test-session-id': validSessionId,
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body);
+      expect(body).toEqual({
+        success: false,
+        error: 'Scan does not belong to session',
+        code: 'FORBIDDEN',
+      });
+    });
+
+    it('should return 404 for invalid scan ID', async () => {
+      // Mock service to throw SCAN_NOT_FOUND error
+      vi.mocked(reportService.getReportStatus).mockRejectedValueOnce(
+        new ReportServiceError('Scan not found', 'SCAN_NOT_FOUND')
+      );
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/scans/${validScanId}/reports`,
+        headers: {
+          'x-test-session-id': validSessionId,
+        },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body);
+      expect(body).toEqual({
+        success: false,
+        error: 'Scan not found',
+        code: 'SCAN_NOT_FOUND',
+      });
+    });
+
+    it('should return 401 when session is missing', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/scans/${validScanId}/reports`,
+        // No session header
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body);
+      expect(body).toEqual({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Valid session required',
+        code: 'SESSION_REQUIRED',
+      });
+
+      // Service should not be called without session
+      expect(reportService.getReportStatus).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for invalid scan ID format', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/scans/invalid-scan-id/reports',
+        headers: {
+          'x-test-session-id': validSessionId,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('VALIDATION_ERROR');
+      expect(body.error).toBe('Invalid request parameters');
+      expect(body.details).toBeDefined();
+    });
+
+    it('should return 500 for unexpected service errors', async () => {
+      // Mock service to throw unexpected error
+      vi.mocked(reportService.getReportStatus).mockRejectedValueOnce(
+        new Error('Unexpected database error')
+      );
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/scans/${validScanId}/reports`,
+        headers: {
+          'x-test-session-id': validSessionId,
+        },
+      });
+
+      expect(response.statusCode).toBe(500);
+      const body = JSON.parse(response.body);
+      expect(body).toEqual({
+        success: false,
+        error: 'Internal server error',
+        code: 'INTERNAL_ERROR',
+      });
     });
   });
 });

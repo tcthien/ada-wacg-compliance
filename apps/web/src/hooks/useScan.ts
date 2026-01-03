@@ -9,10 +9,12 @@ interface ScanState {
   createdAt: string;
   completedAt: string | null;
   errorMessage: string | null;
+  aiEnabled?: boolean | undefined;
+  email?: string | undefined;
 }
 
 interface UseScanOptions {
-  pollInterval?: number; // ms, default 2000
+  pollInterval?: number | undefined; // ms, default 2000
 }
 
 export function useScan(scanId: string, options: UseScanOptions = {}) {
@@ -33,6 +35,8 @@ export function useScan(scanId: string, options: UseScanOptions = {}) {
         createdAt: data.createdAt,
         completedAt: data.completedAt,
         errorMessage: data.errorMessage,
+        aiEnabled: data.aiEnabled,
+        email: data.email,
       });
       setError(null);
 

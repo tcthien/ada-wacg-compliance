@@ -6,7 +6,7 @@
  */
 
 import { getPrismaClient } from '../../config/database.js';
-import type { Scan, ScanResult, Issue, ScanStatus, WcagLevel } from '@prisma/client';
+import type { Scan, ScanResult, Issue, ScanStatus, WcagLevel, AiStatus } from '@prisma/client';
 
 /**
  * Scan Repository Error
@@ -39,6 +39,10 @@ export interface CreateScanData {
   wcagLevel: WcagLevel;
   guestSessionId?: string | null;
   userId?: string | null;
+  batchId?: string | null;
+  pageTitle?: string | null;
+  aiEnabled?: boolean;
+  aiStatus?: AiStatus;
 }
 
 /**
@@ -115,7 +119,11 @@ export async function createScan(data: CreateScanData): Promise<Scan> {
         wcagLevel: data.wcagLevel,
         guestSessionId: data.guestSessionId ?? null,
         userId: data.userId ?? null,
+        batchId: data.batchId ?? null,
+        pageTitle: data.pageTitle ?? null,
         status: 'PENDING',
+        aiEnabled: data.aiEnabled ?? false,
+        aiStatus: data.aiStatus ?? null,
       },
     });
 
@@ -372,6 +380,174 @@ export async function updateScanStatus(
       `Failed to update scan ${id}`,
       'UPDATE_FAILED',
       err
+    );
+  }
+}
+
+/**
+ * AI status data returned by getAiStatus
+ */
+export interface AiStatusData {
+  aiEnabled: boolean;
+  aiStatus: AiStatus | null;
+  aiSummary: string | null;
+  aiRemediationPlan: string | null;
+  aiProcessedAt: Date | null;
+  aiInputTokens: number | null;
+  aiOutputTokens: number | null;
+  aiTotalTokens: number | null;
+  aiModel: string | null;
+  aiProcessingTime: number | null;
+}
+
+/**
+ * Update AI status for a scan
+ *
+ * @param scanId - Scan ID
+ * @param status - New AI status
+ * @returns Updated scan
+ * @throws ScanRepositoryError if scan not found or update fails
+ *
+ * @example
+ * ```typescript
+ * // Mark AI scan as downloaded
+ * await updateAiStatus('scan-123', 'DOWNLOADED');
+ *
+ * // Mark AI scan as completed
+ * await updateAiStatus('scan-123', 'COMPLETED');
+ *
+ * // Mark AI scan as failed
+ * await updateAiStatus('scan-123', 'FAILED');
+ * ```
+ */
+export async function updateAiStatus(
+  scanId: string,
+  status: AiStatus
+): Promise<Scan> {
+  const prisma = getPrismaClient();
+
+  try {
+    if (!scanId || typeof scanId !== 'string') {
+      throw new ScanRepositoryError(
+        'Scan ID is required and must be a string',
+        'INVALID_INPUT'
+      );
+    }
+
+    if (!status) {
+      throw new ScanRepositoryError(
+        'AI status is required',
+        'INVALID_INPUT'
+      );
+    }
+
+    // Check if scan exists and has AI enabled
+    const existingScan = await prisma.scan.findUnique({
+      where: { id: scanId },
+      select: { id: true, aiEnabled: true },
+    });
+
+    if (!existingScan) {
+      throw new ScanRepositoryError(
+        `Scan not found: ${scanId}`,
+        'NOT_FOUND'
+      );
+    }
+
+    if (!existingScan.aiEnabled) {
+      throw new ScanRepositoryError(
+        `Scan ${scanId} does not have AI enabled`,
+        'INVALID_INPUT'
+      );
+    }
+
+    // Build update data
+    const updateData: {
+      aiStatus: AiStatus;
+      aiProcessedAt?: Date;
+    } = {
+      aiStatus: status,
+    };
+
+    // Set aiProcessedAt for terminal states
+    if (status === 'COMPLETED' || status === 'FAILED') {
+      updateData.aiProcessedAt = new Date();
+    }
+
+    // Update scan
+    const scan = await prisma.scan.update({
+      where: { id: scanId },
+      data: updateData,
+    });
+
+    console.log(`✅ Scan Repository: Updated scan ${scanId} AI status to ${status}`);
+    return scan;
+  } catch (error) {
+    // Re-throw ScanRepositoryError as-is
+    if (error instanceof ScanRepositoryError) {
+      throw error;
+    }
+
+    // Wrap other errors
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error('❌ Scan Repository: Failed to update AI status:', err.message);
+    throw new ScanRepositoryError(
+      `Failed to update AI status for scan ${scanId}`,
+      'UPDATE_FAILED',
+      err
+    );
+  }
+}
+
+/**
+ * Get AI status and related fields for a scan
+ *
+ * @param scanId - Scan ID
+ * @returns AI status data, or null if scan not found
+ *
+ * @example
+ * ```typescript
+ * const aiStatus = await getAiStatus('scan-123');
+ * if (aiStatus && aiStatus.aiEnabled) {
+ *   console.log(`AI Status: ${aiStatus.aiStatus}`);
+ *   if (aiStatus.aiStatus === 'COMPLETED') {
+ *     console.log(`Summary: ${aiStatus.aiSummary}`);
+ *     console.log(`Tokens used: ${aiStatus.aiTotalTokens}`);
+ *   }
+ * }
+ * ```
+ */
+export async function getAiStatus(scanId: string): Promise<AiStatusData | null> {
+  const prisma = getPrismaClient();
+
+  try {
+    if (!scanId || typeof scanId !== 'string') {
+      return null;
+    }
+
+    const scan = await prisma.scan.findUnique({
+      where: { id: scanId },
+      select: {
+        aiEnabled: true,
+        aiStatus: true,
+        aiSummary: true,
+        aiRemediationPlan: true,
+        aiProcessedAt: true,
+        aiInputTokens: true,
+        aiOutputTokens: true,
+        aiTotalTokens: true,
+        aiModel: true,
+        aiProcessingTime: true,
+      },
+    });
+
+    return scan;
+  } catch (error) {
+    console.error('❌ Scan Repository: Failed to get AI status:', error);
+    throw new ScanRepositoryError(
+      `Failed to get AI status for scan ${scanId}`,
+      'GET_FAILED',
+      error instanceof Error ? error : new Error(String(error))
     );
   }
 }

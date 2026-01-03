@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/admin-api';
-import { ArrowLeft, Trash2, RotateCw, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Trash2, RotateCw, AlertCircle, Layers, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 import { AdminScanConsole } from '@/components/admin/ScanConsole';
+import { AdminExportButton } from '@/components/admin/AdminExportButton';
 
 /**
  * Admin Scan Detail Page
@@ -60,6 +62,15 @@ interface GuestSession {
   createdAt: string;
 }
 
+interface BatchContext {
+  id: string;
+  homepageUrl: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'STALE';
+  totalUrls: number;
+  completedCount: number;
+  failedCount: number;
+}
+
 interface ScanDetails {
   id: string;
   url: string;
@@ -74,6 +85,8 @@ interface ScanDetails {
   errorMessage: string | null;
   scanResult: ScanResult | null;
   guestSession: GuestSession | null;
+  batchScanId: string | null;
+  batchScan: BatchContext | null;
 }
 
 /**
@@ -89,6 +102,28 @@ function getStatusColor(status: ScanDetails['status']) {
       return 'bg-yellow-100 text-yellow-800';
     case 'FAILED':
       return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
+
+/**
+ * Get batch status badge color
+ */
+function getBatchStatusColor(status: BatchContext['status']) {
+  switch (status) {
+    case 'COMPLETED':
+      return 'bg-green-100 text-green-800';
+    case 'RUNNING':
+      return 'bg-blue-100 text-blue-800';
+    case 'PENDING':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'FAILED':
+      return 'bg-red-100 text-red-800';
+    case 'CANCELLED':
+      return 'bg-gray-100 text-gray-800';
+    case 'STALE':
+      return 'bg-orange-100 text-orange-800';
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -284,6 +319,12 @@ export default function ScanDetailPage() {
 
         {/* Action buttons */}
         <div className="flex items-center gap-3">
+          {/* Export button - only show for completed scans */}
+          <AdminExportButton
+            scanId={scanId}
+            scanStatus={scan.status}
+          />
+
           {/* Retry button - only show for failed scans */}
           {scan.status === 'FAILED' && (
             <button
@@ -380,6 +421,73 @@ export default function ScanDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Batch context section - shown if scan belongs to a batch */}
+      {scan.batchScanId && scan.batchScan && (
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Layers className="h-5 w-5 text-blue-600" />
+            <h2 className="text-xl font-bold text-gray-900">Batch Context</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Batch ID with link */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Batch ID</label>
+              <Link
+                href={`/admin/batches/${scan.batchScanId}?highlightScanId=${scan.id}`}
+                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline font-mono"
+              >
+                {scan.batchScanId.substring(0, 8)}...
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+
+            {/* Homepage URL */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Homepage URL</label>
+              <a
+                href={scan.batchScan.homepageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:text-blue-800 hover:underline break-all"
+              >
+                {scan.batchScan.homepageUrl}
+              </a>
+            </div>
+
+            {/* Batch status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Batch Status</label>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getBatchStatusColor(scan.batchScan.status)}`}>
+                {scan.batchScan.status}
+              </span>
+            </div>
+
+            {/* Progress */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Batch Progress</label>
+              <p className="text-sm text-gray-900">
+                {scan.batchScan.completedCount + scan.batchScan.failedCount} / {scan.batchScan.totalUrls} URLs
+                <span className="text-gray-500 ml-1">
+                  ({scan.batchScan.completedCount} completed, {scan.batchScan.failedCount} failed)
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* View batch button */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <Link
+              href={`/admin/batches/${scan.batchScanId}?highlightScanId=${scan.id}`}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Layers className="h-4 w-4" />
+              View Batch Details
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Scan results section */}
       {scan.scanResult && (
@@ -549,7 +657,7 @@ export default function ScanDetailPage() {
       )}
 
       {/* Admin Scan Console */}
-      <AdminScanConsole scanId={scanId} defaultView="expanded" />
+      <AdminScanConsole scanId={scanId} scanStatus={scan.status} defaultView="expanded" />
     </div>
   );
 }

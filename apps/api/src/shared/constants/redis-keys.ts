@@ -94,6 +94,42 @@ export const RedisKeys = {
   },
 
   /**
+   * Batch scan status tracking
+   * Pattern: batch:{batchId}:status
+   * TTL: 24 hours
+   * Usage: Real-time batch scan status and progress
+   */
+  BATCH_STATUS: {
+    pattern: 'batch:status',
+    build: (batchId: string) => `batch:${batchId}:status`,
+    ttl: 86400, // 24 hours
+  },
+
+  /**
+   * Batch rate limiting - URL count per session
+   * Pattern: rate_limit_batch_urls:{sessionId}
+   * TTL: 1 hour (3600 seconds)
+   * Usage: Track total URLs scanned per session per hour (max 100)
+   */
+  RATE_LIMIT_BATCH_URLS: {
+    pattern: 'rate_limit_batch_urls',
+    build: (sessionId: string) => `rate_limit_batch_urls:${sessionId}`,
+    ttl: 3600, // 1 hour
+  },
+
+  /**
+   * Batch rate limiting - Batch count per session
+   * Pattern: rate_limit_batch_count:{sessionId}
+   * TTL: 1 hour (3600 seconds)
+   * Usage: Track number of batch submissions per session per hour (max 2)
+   */
+  RATE_LIMIT_BATCH_COUNT: {
+    pattern: 'rate_limit_batch_count',
+    build: (sessionId: string) => `rate_limit_batch_count:${sessionId}`,
+    ttl: 3600, // 1 hour
+  },
+
+  /**
    * User scan history
    * Pattern: user:{userId}:scans
    * TTL: 30 days
@@ -115,6 +151,42 @@ export const RedisKeys = {
     pattern: 'cache',
     build: (endpoint: string, paramsHash: string) => `cache:${endpoint}:${paramsHash}`,
     ttl: 300, // 5 minutes
+  },
+
+  /**
+   * AI Campaign status tracking
+   * Pattern: ai_campaign:{campaignId}:status
+   * TTL: 5 minutes (300 seconds)
+   * Usage: Track active AI campaign status and configuration
+   */
+  AI_CAMPAIGN_STATUS: {
+    pattern: 'ai_campaign:status',
+    build: (campaignId: string) => `ai_campaign:${campaignId}:status`,
+    ttl: 300, // 5 minutes
+  },
+
+  /**
+   * AI Campaign slot availability
+   * Pattern: ai_campaign:{campaignId}:slots
+   * TTL: 1 hour (3600 seconds)
+   * Usage: Track available scan slots for AI campaign early bird access
+   */
+  AI_CAMPAIGN_SLOTS: {
+    pattern: 'ai_campaign:slots',
+    build: (campaignId: string) => `ai_campaign:${campaignId}:slots`,
+    ttl: 3600, // 1 hour
+  },
+
+  /**
+   * AI-powered scan status tracking
+   * Pattern: ai_scan:{scanId}:status
+   * TTL: 24 hours (86400 seconds)
+   * Usage: Track status and results of AI-enhanced scans
+   */
+  AI_SCAN_STATUS: {
+    pattern: 'ai_scan:status',
+    build: (scanId: string) => `ai_scan:${scanId}:status`,
+    ttl: 86400, // 24 hours
   },
 } as const;
 

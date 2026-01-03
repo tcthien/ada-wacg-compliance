@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
+  ComposedChart,
   PieChart,
   Pie,
   Cell,
@@ -14,7 +17,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { adminApi, type ScanTrend, type IssueDistribution } from '@/lib/admin-api';
+import { adminApi, type ScanTrend, type IssueDistribution, type BatchMetricsResponse } from '@/lib/admin-api';
 
 /**
  * Dashboard Charts Component
@@ -23,13 +26,20 @@ import { adminApi, type ScanTrend, type IssueDistribution } from '@/lib/admin-ap
  * - Line chart showing daily scan trends (success/failed breakdown)
  * - Pie chart showing issue distribution by severity
  */
+// Time period options
+type TimePeriod = 7 | 30 | 90;
+
 export function DashboardCharts() {
   const [trendsData, setTrendsData] = useState<ScanTrend[]>([]);
   const [issuesData, setIssuesData] = useState<IssueDistribution | null>(null);
+  const [batchTrendsData, setBatchTrendsData] = useState<BatchMetricsResponse['trends']>([]);
+  const [batchTimePeriod, setBatchTimePeriod] = useState<TimePeriod>(30);
   const [trendsLoading, setTrendsLoading] = useState(true);
   const [issuesLoading, setIssuesLoading] = useState(true);
+  const [batchTrendsLoading, setBatchTrendsLoading] = useState(true);
   const [trendsError, setTrendsError] = useState<string | null>(null);
   const [issuesError, setIssuesError] = useState<string | null>(null);
+  const [batchTrendsError, setBatchTrendsError] = useState<string | null>(null);
 
   // Fetch scan trends data
   useEffect(() => {
@@ -68,6 +78,29 @@ export function DashboardCharts() {
 
     fetchIssues();
   }, []);
+
+  // Fetch batch trends data
+  useEffect(() => {
+    const fetchBatchTrends = async () => {
+      try {
+        setBatchTrendsLoading(true);
+        setBatchTrendsError(null);
+        const data = await adminApi.batches.getMetrics();
+        // Filter trends based on selected time period
+        const now = new Date();
+        const cutoffDate = new Date(now.getTime() - batchTimePeriod * 24 * 60 * 60 * 1000);
+        const filteredTrends = data.trends.filter((item) => new Date(item.date) >= cutoffDate);
+        setBatchTrendsData(filteredTrends);
+      } catch (error) {
+        setBatchTrendsError(error instanceof Error ? error.message : 'Failed to load batch trends');
+        console.error('Error fetching batch trends:', error);
+      } finally {
+        setBatchTrendsLoading(false);
+      }
+    };
+
+    fetchBatchTrends();
+  }, [batchTimePeriod]);
 
   // Transform issue distribution data for pie chart
   const pieChartData = issuesData
@@ -220,6 +253,123 @@ export function DashboardCharts() {
               ))}
             </div>
           </>
+        )}
+      </div>
+
+      {/* Batch Trends Chart - Full Width */}
+      <div className="rounded-lg border bg-card p-6 shadow-sm md:col-span-2">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Batch Scan Trends</h3>
+          <div className="flex gap-2">
+            {([7, 30, 90] as const).map((days) => (
+              <button
+                key={days}
+                onClick={() => setBatchTimePeriod(days)}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                  batchTimePeriod === days
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {days}d
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {batchTrendsLoading && (
+          <div className="flex h-[300px] items-center justify-center">
+            <p className="text-muted-foreground">Loading batch trends...</p>
+          </div>
+        )}
+
+        {batchTrendsError && (
+          <div className="flex h-[300px] items-center justify-center">
+            <p className="text-sm text-destructive">{batchTrendsError}</p>
+          </div>
+        )}
+
+        {!batchTrendsLoading && !batchTrendsError && batchTrendsData.length === 0 && (
+          <div className="flex h-[300px] items-center justify-center">
+            <p className="text-muted-foreground">No batch trend data available</p>
+          </div>
+        )}
+
+        {!batchTrendsLoading && !batchTrendsError && batchTrendsData.length > 0 && (
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={batchTrendsData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 12 }}
+                tickFormatter={(value) => {
+                  const date = new Date(value);
+                  return `${date.getMonth() + 1}/${date.getDate()}`;
+                }}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 12 }}
+                label={{
+                  value: 'Count / Avg URLs',
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle', fontSize: 11 },
+                }}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 12 }}
+                domain={[0, 100]}
+                label={{
+                  value: 'Completion %',
+                  angle: 90,
+                  position: 'insideRight',
+                  style: { textAnchor: 'middle', fontSize: 11 },
+                }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '6px',
+                }}
+                labelFormatter={(value) => {
+                  const date = new Date(value as string);
+                  return date.toLocaleDateString();
+                }}
+              />
+              <Legend />
+              <Bar
+                yAxisId="left"
+                dataKey="batchCount"
+                fill="#a855f7"
+                name="Batch Count"
+                barSize={20}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="avgUrls"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                name="Avg URLs"
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="completionRate"
+                stroke="#22c55e"
+                strokeWidth={2}
+                name="Completion Rate"
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>

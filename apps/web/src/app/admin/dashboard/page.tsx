@@ -1,4 +1,5 @@
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
+import { DashboardBatchMetrics } from '@/components/admin/DashboardBatchMetrics';
 import { DashboardCharts } from '@/components/admin/DashboardCharts';
 
 /**
@@ -30,6 +31,9 @@ export default function AdminDashboardPage() {
 
       {/* Dashboard metrics */}
       <DashboardMetrics />
+
+      {/* Batch metrics */}
+      <DashboardBatchMetrics />
 
       {/* Dashboard charts */}
       <DashboardCharts />

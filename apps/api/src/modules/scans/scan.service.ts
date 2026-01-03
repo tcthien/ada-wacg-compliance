@@ -19,7 +19,12 @@ import {
   type ScanWithResult,
   ScanRepositoryError,
 } from './scan.repository.js';
-import type { Scan, WcagLevel, ScanStatus } from '@prisma/client';
+import type { Scan, WcagLevel, ScanStatus, AiStatus } from '@prisma/client';
+import {
+  checkAndReserveSlotAtomic,
+  AiCampaignServiceError,
+} from '../ai-campaign/ai-campaign.service.js';
+import { getPrismaClient } from '../../config/database.js';
 
 /**
  * Scan Service Error
@@ -43,6 +48,7 @@ export interface CreateScanInput {
   url: string;
   email?: string;
   wcagLevel?: WcagLevel;
+  aiEnabled?: boolean;
 }
 
 /**
@@ -56,6 +62,8 @@ export interface ScanStatusResponse {
   createdAt: Date;
   completedAt?: Date | null;
   errorMessage?: string | null;
+  aiEnabled?: boolean;
+  email?: string | null;
 }
 
 /**
@@ -137,13 +145,58 @@ export async function createScan(
 
     const normalizedUrl = validationResult.normalizedUrl!;
 
-    // Create scan record in database
+    // Handle AI opt-in: check slot availability and reserve atomically
+    let aiEnabled = false;
+    let aiStatus: AiStatus | undefined = undefined;
+
+    if (data.aiEnabled) {
+      try {
+        // Create a temporary scan ID for slot reservation
+        // We'll use this to track the reservation before the scan is created
+        const tempScanId = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+        const reservation = await checkAndReserveSlotAtomic(tempScanId);
+
+        if (reservation.reserved) {
+          aiEnabled = true;
+          aiStatus = 'PENDING';
+          console.log(
+            `✅ Scan Service: AI slot reserved for scan - ` +
+            `remaining=${reservation.slotsRemaining}`
+          );
+        } else {
+          // Slot reservation failed - disable AI for this scan
+          aiEnabled = false;
+          aiStatus = undefined;
+          console.warn(
+            `⚠️  Scan Service: AI slot reservation failed - ` +
+            `reason=${reservation.reason}, falling back to non-AI scan`
+          );
+        }
+      } catch (error) {
+        // If slot reservation fails due to service error, log and continue without AI
+        if (error instanceof AiCampaignServiceError) {
+          console.error(
+            `❌ Scan Service: AI campaign service error during slot reservation: ${error.message}`
+          );
+        } else {
+          console.error('❌ Scan Service: Unexpected error during slot reservation:', error);
+        }
+        // Fallback to non-AI scan on error
+        aiEnabled = false;
+        aiStatus = undefined;
+      }
+    }
+
+    // Create scan record in database with AI status
     const scanData: CreateScanData = {
       url: normalizedUrl,
       email: data.email ?? null,
       wcagLevel: data.wcagLevel ?? 'AA',
       guestSessionId: sessionId,
       userId: null, // Guest sessions don't have user IDs
+      aiEnabled,
+      aiStatus,
     };
 
     const scan = await createScanInRepo(scanData);
@@ -152,6 +205,7 @@ export async function createScan(
     try {
       await addScanJob(scan.id, normalizedUrl, scan.wcagLevel, {
         sessionId,
+        email: scan.email ?? undefined,
       });
     } catch (error) {
       // Log queue error but don't fail the request
@@ -248,6 +302,8 @@ export async function getScanStatus(
           createdAt: string;
           completedAt?: string | null;
           errorMessage?: string | null;
+          aiEnabled?: boolean;
+          email?: string | null;
         };
 
         return {
@@ -258,6 +314,8 @@ export async function getScanStatus(
           createdAt: new Date(status.createdAt),
           completedAt: status.completedAt ? new Date(status.completedAt) : null,
           errorMessage: status.errorMessage ?? null,
+          aiEnabled: status.aiEnabled ?? false,
+          email: status.email ?? null,
         };
       }
     } catch (error) {
@@ -302,6 +360,8 @@ export async function getScanStatus(
             createdAt: scan.createdAt.toISOString(),
             completedAt: scan.completedAt?.toISOString() ?? null,
             errorMessage: scan.errorMessage ?? null,
+            aiEnabled: scan.aiEnabled ?? false,
+            email: scan.email ?? null,
           })
         ),
         redis.setex(
@@ -323,6 +383,8 @@ export async function getScanStatus(
       createdAt: scan.createdAt,
       completedAt: scan.completedAt,
       errorMessage: scan.errorMessage,
+      aiEnabled: scan.aiEnabled ?? false,
+      email: scan.email ?? null,
     };
   } catch (error) {
     console.error('❌ Scan Service: Failed to get scan status:', error);
@@ -427,6 +489,72 @@ export async function getScanResult(
 }
 
 /**
+ * Get AI status for a scan
+ *
+ * Returns the current AI processing status for a scan with AI enabled.
+ * Used by frontend for polling AI processing progress.
+ *
+ * @param scanId - Scan ID
+ * @returns AI status or null if scan not found or AI not enabled
+ *
+ * @example
+ * ```typescript
+ * const aiStatus = await getAiStatus('scan-123');
+ * if (aiStatus) {
+ *   console.log(`AI Status: ${aiStatus.status}`);
+ *   if (aiStatus.status === 'COMPLETED') {
+ *     console.log('Summary:', aiStatus.summary);
+ *     console.log('Remediation Plan:', aiStatus.remediationPlan);
+ *   }
+ * }
+ * ```
+ */
+export async function getAiStatus(scanId: string): Promise<{
+  scanId: string;
+  aiEnabled: boolean;
+  status: AiStatus | null;
+  summary?: string | null;
+  remediationPlan?: string | null;
+  processedAt?: Date | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  model?: string | null;
+  processingTime?: number | null;
+} | null> {
+  try {
+    if (!scanId || typeof scanId !== 'string') {
+      return null;
+    }
+
+    // Fetch scan from database
+    const scan = await getScanById(scanId);
+
+    if (!scan) {
+      return null;
+    }
+
+    // Return AI status information
+    return {
+      scanId: scan.id,
+      aiEnabled: scan.aiEnabled,
+      status: scan.aiStatus,
+      summary: scan.aiSummary,
+      remediationPlan: scan.aiRemediationPlan,
+      processedAt: scan.aiProcessedAt,
+      inputTokens: scan.aiInputTokens,
+      outputTokens: scan.aiOutputTokens,
+      totalTokens: scan.aiTotalTokens,
+      model: scan.aiModel,
+      processingTime: scan.aiProcessingTime,
+    };
+  } catch (error) {
+    console.error('❌ Scan Service: Failed to get AI status:', error);
+    return null;
+  }
+}
+
+/**
  * List scans for a session with pagination
  *
  * @param sessionId - Guest session ID
@@ -473,5 +601,140 @@ export async function listScans(
     const err = error instanceof Error ? error : new Error(String(error));
     console.error('❌ Scan Service: Failed to list scans:', err.message);
     throw new ScanServiceError('Failed to list scans', 'LIST_FAILED', err);
+  }
+}
+
+/**
+ * Bulk delete result
+ */
+export interface BulkDeleteResult {
+  deleted: number;
+  failed: Array<{ scanId: string; reason: string }>;
+}
+
+/**
+ * Bulk delete scans for a session
+ *
+ * 1. Validates all scan IDs
+ * 2. Verifies session ownership for all scans
+ * 3. Deletes scans in a transaction
+ * 4. Returns deletion summary with failed items
+ *
+ * @param scanIds - Array of scan IDs to delete
+ * @param sessionId - Guest session ID for authorization
+ * @returns Deletion summary
+ * @throws ScanServiceError with codes: INVALID_INPUT, DELETE_FAILED
+ *
+ * @example
+ * ```typescript
+ * const result = await bulkDeleteScans(
+ *   ['scan-123', 'scan-456'],
+ *   'session-789'
+ * );
+ * console.log(`Deleted ${result.deleted} scans`);
+ * if (result.failed.length > 0) {
+ *   console.log(`Failed to delete ${result.failed.length} scans`);
+ * }
+ * ```
+ */
+export async function bulkDeleteScans(
+  scanIds: string[],
+  sessionId: string
+): Promise<BulkDeleteResult> {
+  try {
+    // Validate input
+    if (!scanIds || !Array.isArray(scanIds)) {
+      throw new ScanServiceError(
+        'Scan IDs array is required',
+        'INVALID_INPUT'
+      );
+    }
+
+    if (scanIds.length === 0) {
+      throw new ScanServiceError(
+        'At least one scan ID is required',
+        'INVALID_INPUT'
+      );
+    }
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      throw new ScanServiceError(
+        'Session ID is required and must be a string',
+        'INVALID_INPUT'
+      );
+    }
+
+    const prisma = getPrismaClient();
+    const failed: Array<{ scanId: string; reason: string }> = [];
+    let deleted = 0;
+
+    // Process deletions in transaction
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const scanId of scanIds) {
+          try {
+            // Verify scan exists and belongs to session
+            const scan = await tx.scan.findUnique({
+              where: { id: scanId },
+              select: { id: true, guestSessionId: true, userId: true },
+            });
+
+            if (!scan) {
+              failed.push({
+                scanId,
+                reason: 'Scan not found',
+              });
+              continue;
+            }
+
+            // Verify ownership
+            if (scan.guestSessionId !== sessionId && scan.userId !== sessionId) {
+              failed.push({
+                scanId,
+                reason: 'Unauthorized - scan belongs to different session',
+              });
+              continue;
+            }
+
+            // Delete scan and related data (cascade will handle issues, results)
+            await tx.scan.delete({
+              where: { id: scanId },
+            });
+
+            deleted++;
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            failed.push({
+              scanId,
+              reason: err.message,
+            });
+          }
+        }
+      });
+
+      console.log(
+        `✅ Scan Service: Bulk delete completed - deleted=${deleted}, failed=${failed.length}`
+      );
+
+      return { deleted, failed };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('❌ Scan Service: Transaction failed during bulk delete:', err.message);
+      throw new ScanServiceError(
+        'Failed to delete scans in transaction',
+        'DELETE_FAILED',
+        err
+      );
+    }
+  } catch (error) {
+    // Re-throw ScanServiceError as-is
+    if (error instanceof ScanServiceError) {
+      throw error;
+    }
+
+    // Wrap other errors
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error('❌ Scan Service: Failed to bulk delete scans:', err.message);
+    throw new ScanServiceError('Failed to bulk delete scans', 'DELETE_FAILED', err);
   }
 }

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useAdminAuthStore } from '@/stores/admin-auth';
 import { LogOut, User } from 'lucide-react';
+import { AdminSearch } from './AdminSearch';
 
 /**
  * Admin header component
@@ -38,6 +39,11 @@ export function AdminHeader() {
           <h1 className="text-xl font-semibold text-gray-800">
             Admin Dashboard
           </h1>
+        </div>
+
+        {/* Center - Search bar */}
+        <div className="flex-1 max-w-xl mx-8">
+          <AdminSearch />
         </div>
 
         {/* Right side - User info & logout */}

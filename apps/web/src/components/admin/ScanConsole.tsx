@@ -13,11 +13,18 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 type ViewMode = 'full' | 'user';
 
 /**
+ * Scan status type matching API response
+ */
+type ScanStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+/**
  * AdminScanConsole Props
  */
 interface AdminScanConsoleProps {
   /** The scan ID to display events for */
   scanId: string;
+  /** Current status of the scan (controls polling behavior) */
+  scanStatus: ScanStatus;
   /** Default view state (expanded or collapsed) */
   defaultView?: 'expanded' | 'collapsed';
   /** Optional CSS classes */
@@ -52,6 +59,7 @@ interface AdminScanConsoleProps {
  */
 export function AdminScanConsole({
   scanId,
+  scanStatus,
   defaultView = 'expanded',
   className,
 }: AdminScanConsoleProps) {
@@ -64,7 +72,8 @@ export function AdminScanConsole({
   const [copyError, setCopyError] = useState<string | null>(null);
 
   // Fetch scan events with polling (isAdmin: true for admin view)
-  const { events, isLoading, error } = useScanEvents(scanId, 'RUNNING', {
+  // Pass actual scanStatus to control polling - stops when COMPLETED or FAILED
+  const { events, isLoading, error } = useScanEvents(scanId, scanStatus, {
     pollInterval: 2000,
     isAdmin: true, // Show admin-only events and DEBUG levels
   });

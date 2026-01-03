@@ -7,6 +7,7 @@
 
 // Controller exports
 export { registerAdminRoutes } from './admin.controller.js';
+export { registerBatchAdminRoutes } from './batch-admin.controller.js';
 
 // Service exports
 export {

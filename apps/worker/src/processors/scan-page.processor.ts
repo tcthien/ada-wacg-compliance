@@ -2,6 +2,8 @@ import { Job, Queue } from 'bullmq';
 import { getPrismaClient } from '../config/prisma.js';
 import { getRedisClient, getBullMQConnection } from '../config/redis.js';
 import { logEvent } from '../services/scan-event.service.js';
+import { notifyScanComplete } from '../services/batch-status.service.js';
+import { addEmailJob } from '../jobs/email-queue.js';
 
 /**
  * Scan Job Data interface
@@ -13,6 +15,7 @@ interface ScanJobData {
   wcagLevel: 'A' | 'AA' | 'AAA';
   userId?: string;
   sessionId?: string;
+  email?: string;
 }
 
 /**
@@ -285,7 +288,7 @@ async function calculateEstimatedWaitTime(job: Job<ScanJobData>): Promise<{
 }
 
 export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
-  const { scanId, url, wcagLevel, userId, sessionId } = job.data;
+  const { scanId, url, wcagLevel, userId, sessionId, email } = job.data;
   const prisma = getPrismaClient();
   const startTime = Date.now();
 
@@ -295,6 +298,7 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
   console.log(`   WCAG Level: ${wcagLevel}`);
   console.log(`   User ID: ${userId ?? 'guest'}`);
   console.log(`   Session ID: ${sessionId ?? 'N/A'}`);
+  console.log(`   Email: ${email ?? 'N/A'}`);
 
   // Calculate queue position and wait time
   const { position, estimatedWaitSeconds } = await calculateEstimatedWaitTime(job);
@@ -624,6 +628,35 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
     });
 
     console.log(`✅ Completed scan job: ${job.id} (${totalTime}ms)`);
+
+    // Notify batch status service that scan completed
+    try {
+      const batchResult = await notifyScanComplete(scanId, 'COMPLETED');
+      if (batchResult?.isComplete) {
+        console.log(
+          `🎯 Batch ${batchResult.batchId} completed with status ${batchResult.status} (${batchResult.completedCount}/${batchResult.totalUrls} scans)`
+        );
+      }
+    } catch (batchError) {
+      // Log error but don't fail the scan - batch status is secondary
+      console.error('⚠️ Failed to update batch status:', batchError);
+    }
+
+    // Queue email notification if email provided
+    if (email) {
+      try {
+        const emailJob = await addEmailJob({
+          scanId,
+          email,
+          type: 'scan_complete',
+        });
+        console.log(`📧 Queued scan_complete email for scan ${scanId} to ${email} (job: ${emailJob.id})`);
+      } catch (emailError) {
+        // Log error but don't fail the scan - email notification is non-critical
+        const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error';
+        console.error(`⚠️ Failed to queue scan_complete email for scan ${scanId}:`, errorMessage);
+      }
+    }
   } catch (error) {
     console.error(`❌ Failed scan job: ${job.id}`, error);
 
@@ -648,6 +681,35 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
     if (failedScan) {
       await updateRedisStatus(scanId, 'FAILED', url, failedScan.createdAt, null, errorMessage);
       await updateRedisProgress(scanId, 0);
+    }
+
+    // Notify batch status service that scan failed
+    try {
+      const batchResult = await notifyScanComplete(scanId, 'FAILED');
+      if (batchResult?.isComplete) {
+        console.log(
+          `🎯 Batch ${batchResult.batchId} completed with status ${batchResult.status} (${batchResult.completedCount}/${batchResult.totalUrls} scans, ${batchResult.failedCount} failed)`
+        );
+      }
+    } catch (batchError) {
+      // Log error but don't fail the scan - batch status is secondary
+      console.error('⚠️ Failed to update batch status:', batchError);
+    }
+
+    // Queue failure notification email if email provided
+    if (email) {
+      try {
+        const emailJob = await addEmailJob({
+          scanId,
+          email,
+          type: 'scan_failed',
+        });
+        console.log(`📧 Queued scan_failed email for scan ${scanId} to ${email} (job: ${emailJob.id})`);
+      } catch (emailError) {
+        // Log error but don't fail the scan - email notification is non-critical
+        const errMsg = emailError instanceof Error ? emailError.message : 'Unknown error';
+        console.error(`⚠️ Failed to queue scan_failed email for scan ${scanId}:`, errMsg);
+      }
     }
 
     throw error;

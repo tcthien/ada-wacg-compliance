@@ -15,6 +15,7 @@
  */
 
 import { useState, useRef } from 'react';
+import Link from 'next/link';
 import { useAdminAiQueue, AiQueueListFilters } from '@/hooks/useAdminAiQueue';
 import { AiStatus } from '@/lib/admin-api';
 import { Button } from '@/components/ui/button';
@@ -371,7 +372,7 @@ export function AiQueueTable({ initialFilters }: AiQueueTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">Scan ID</TableHead>
+              <TableHead className="min-w-[300px]">Scan ID</TableHead>
               <TableHead>URL</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Status</TableHead>
@@ -403,7 +404,13 @@ export function AiQueueTable({ initialFilters }: AiQueueTableProps) {
                 return (
                   <TableRow key={scan.id}>
                     <TableCell className="font-mono text-xs">
-                      {scan.id.substring(0, 8)}...
+                      <Link
+                        href={`/admin/scans/${scan.id}`}
+                        className="text-blue-600 hover:underline hover:text-blue-800"
+                        title="View scan details"
+                      >
+                        {scan.id}
+                      </Link>
                     </TableCell>
                     <TableCell>
                       <a

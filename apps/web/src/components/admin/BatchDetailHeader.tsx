@@ -1,8 +1,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Sparkles } from 'lucide-react';
 import { BatchStatus, WcagLevel } from '@/lib/admin-api';
+
+/**
+ * AI scan statistics for batch
+ */
+interface AiScanStats {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+}
 
 /**
  * Props for BatchDetailHeader component
@@ -24,6 +35,8 @@ interface BatchDetailHeaderProps {
   cancelledAt?: string | null;
   /** Discovery ID (if created from discovery) */
   discoveryId?: string | null;
+  /** AI scan statistics (if any scans have AI enabled) */
+  aiStats?: AiScanStats | null;
 }
 
 /**
@@ -112,6 +125,7 @@ export function BatchDetailHeader({
   completedAt = null,
   cancelledAt = null,
   discoveryId = null,
+  aiStats = null,
 }: BatchDetailHeaderProps) {
   const router = useRouter();
 
@@ -155,6 +169,16 @@ export function BatchDetailHeader({
           >
             WCAG {wcagLevel}
           </span>
+          {/* AI Enabled Badge */}
+          {aiStats && aiStats.total > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-700"
+              title={`AI Scan: ${aiStats.completed} completed, ${aiStats.pending} pending, ${aiStats.processing} processing, ${aiStats.failed} failed`}
+            >
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              AI Enabled ({aiStats.completed}/{aiStats.total})
+            </span>
+          )}
         </div>
 
         {/* Batch ID */}

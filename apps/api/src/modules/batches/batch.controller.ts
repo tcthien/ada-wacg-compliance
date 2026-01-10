@@ -104,6 +104,8 @@ async function createBatchHandler(
       urls: body.urls,
       wcagLevel: body.wcagLevel,
       guestSessionId: request.guestSession.id,
+      email: body.email,
+      aiEnabled: body.aiEnabled,
     };
 
     // Create batch via service

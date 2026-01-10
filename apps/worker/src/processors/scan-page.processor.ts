@@ -42,7 +42,9 @@ async function updateRedisStatus(
   url: string,
   createdAt: Date,
   completedAt: Date | null = null,
-  errorMessage: string | null = null
+  errorMessage: string | null = null,
+  aiEnabled: boolean = false,
+  email: string | null = null
 ): Promise<void> {
   const redis = getRedisClient();
   const statusKey = RedisKeys.SCAN_STATUS.build(scanId);
@@ -54,6 +56,8 @@ async function updateRedisStatus(
     createdAt: createdAt.toISOString(),
     completedAt: completedAt?.toISOString() ?? null,
     errorMessage,
+    aiEnabled,
+    email,
   };
 
   await redis.setex(statusKey, RedisKeys.SCAN_STATUS.ttl, JSON.stringify(statusData));
@@ -335,10 +339,10 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
   });
 
   try {
-    // Get scan to retrieve createdAt
+    // Get scan to retrieve createdAt, aiEnabled, and email
     const scan = await prisma.scan.findUnique({
       where: { id: scanId },
-      select: { createdAt: true },
+      select: { createdAt: true, aiEnabled: true, email: true },
     });
 
     if (!scan) {
@@ -352,7 +356,7 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
     });
 
     // Update Redis cache with new status
-    await updateRedisStatus(scanId, 'RUNNING', url, scan.createdAt);
+    await updateRedisStatus(scanId, 'RUNNING', url, scan.createdAt, null, null, scan.aiEnabled, scan.email);
     await updateRedisProgress(scanId, 10);
     console.log(`   Status: RUNNING`);
 
@@ -576,7 +580,7 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
       });
 
       // Update Redis cache with completed status
-      await updateRedisStatus(scanId, 'COMPLETED', url, scan.createdAt, completedAt);
+      await updateRedisStatus(scanId, 'COMPLETED', url, scan.createdAt, completedAt, null, scan.aiEnabled, scan.email);
       await updateRedisProgress(scanId, 100);
     });
 
@@ -662,10 +666,10 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
-    // Get scan createdAt for Redis update
+    // Get scan data for Redis update
     const failedScan = await prisma.scan.findUnique({
       where: { id: scanId },
-      select: { createdAt: true },
+      select: { createdAt: true, aiEnabled: true, email: true },
     });
 
     // Update scan status to FAILED
@@ -679,7 +683,7 @@ export async function processScanPage(job: Job<ScanJobData>): Promise<void> {
 
     // Update Redis cache with failed status
     if (failedScan) {
-      await updateRedisStatus(scanId, 'FAILED', url, failedScan.createdAt, null, errorMessage);
+      await updateRedisStatus(scanId, 'FAILED', url, failedScan.createdAt, null, errorMessage, failedScan.aiEnabled, failedScan.email);
       await updateRedisProgress(scanId, 0);
     }
 

@@ -1,0 +1,172 @@
+You are an expert web accessibility auditor specializing in WCAG (Web Content Accessibility Guidelines) compliance testing. Your task is to perform a comprehensive accessibility analysis of the provided website content.
+
+## Mission
+
+Analyze the downloaded website content for **WCAG {{wcagLevel}} compliance**. Identify accessibility violations, provide detailed explanations, and suggest remediation strategies.
+
+## Website Content to Analyze
+
+**Scan ID**: {{scanId}}
+**URL**: {{url}}
+**Page Title**: {{pageTitle}}
+
+### HTML Content
+
+```html
+{{htmlContent}}
+```
+
+{{#if accessibilitySnapshot}}
+### Accessibility Tree Snapshot
+
+This is the browser's accessibility tree representation of the page:
+
+```json
+{{accessibilitySnapshot}}
+```
+{{/if}}
+
+{{#if screenshotPath}}
+### Screenshot
+
+A full-page screenshot has been captured at: {{screenshotPath}}
+{{/if}}
+
+## WCAG {{wcagLevel}} Focus Areas
+
+Evaluate against these key WCAG principles:
+
+### Perceivable
+- Text alternatives for non-text content (images, icons, charts)
+- Captions and alternatives for multimedia
+- Adaptable content structure and proper heading hierarchy
+- Sufficient color contrast (4.5:1 for normal text, 3:1 for large text at AA level)
+- Text resize and reflow capabilities
+
+### Operable
+- Keyboard accessibility for all interactive elements
+- Sufficient time for user interactions
+- No seizure-inducing flashing content
+- Clear navigation mechanisms and focus indicators
+- Input modalities beyond keyboard (touch, voice)
+
+### Understandable
+- Readable and understandable text (language attributes)
+- Predictable page behavior and navigation
+- Clear input assistance and error identification
+- Consistent identification of components
+
+### Robust
+- Valid HTML markup and ARIA usage
+- Compatibility with assistive technologies
+- Proper semantic HTML elements
+- Name, role, value for all UI components
+
+## Output Format Requirements
+
+You MUST provide your analysis as a JSON object matching this exact structure:
+
+```json
+{
+  "wcagLevel": "{{wcagLevel}}",
+  "scanDate": "YYYY-MM-DD HH:mm:ss",
+  "results": [
+    {
+      "scanId": "{{scanId}}",
+      "url": "{{url}}",
+      "pageTitle": "string (page title from content)",
+      "summary": {
+        "totalIssues": "number",
+        "criticalIssues": "number",
+        "seriousIssues": "number",
+        "moderateIssues": "number",
+        "minorIssues": "number",
+        "overallCompliance": "string (PASS/FAIL/PARTIAL)",
+        "complianceScore": "number (0-100)"
+      },
+      "remediationPlan": {
+        "quickWins": ["array of string - high impact, easy fixes"],
+        "shortTerm": ["array of string - 1-2 weeks effort"],
+        "longTerm": ["array of string - significant redesign needed"],
+        "estimatedEffort": "string (LOW/MEDIUM/HIGH)"
+      },
+      "issues": [
+        {
+          "ruleId": "string (e.g., 'wcag-1.1.1-missing-alt')",
+          "wcagCriteria": "string (e.g., '1.1.1 Non-text Content (Level A)')",
+          "impact": "string (CRITICAL/SERIOUS/MODERATE/MINOR)",
+          "description": "string (what the violation is)",
+          "helpText": "string (how to fix it - general guidance)",
+          "helpUrl": "string (reference URL to WCAG docs or best practices)",
+          "htmlSnippet": "string (actual HTML code with the issue)",
+          "cssSelector": "string (CSS selector to locate the element)",
+          "aiExplanation": "string (detailed AI analysis - why this is a problem, impact on users with disabilities)",
+          "aiFixSuggestion": "string (specific code fix recommendation with before/after examples)",
+          "aiPriority": "number (1-10, where 10 is highest priority based on severity and user impact)"
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Analysis Guidelines
+
+### Issue Classification (Impact Levels)
+
+- **CRITICAL**: Prevents users with disabilities from accessing core functionality (e.g., form submission without keyboard access, missing form labels, insufficient color contrast on primary CTAs)
+- **SERIOUS**: Significantly impairs user experience for people with disabilities (e.g., missing heading structure, no skip links, images without alt text)
+- **MODERATE**: Creates barriers but workarounds exist (e.g., non-semantic HTML, missing ARIA labels on secondary elements)
+- **MINOR**: Best practice violations with minimal user impact (e.g., redundant ARIA, non-optimal markup)
+
+### AI Priority Scoring (1-10)
+
+Consider multiple factors:
+- Severity of the issue
+- Number of users affected
+- Frequency of the element on the page
+- Ease of remediation
+- Legal/compliance risk
+
+Examples:
+- **Priority 10**: Inaccessible login form (affects all users, legal risk)
+- **Priority 8**: Missing alt text on product images (affects many users)
+- **Priority 5**: Suboptimal heading hierarchy (UX issue, moderate impact)
+- **Priority 2**: Missing lang attribute on footer link (minimal impact)
+
+### Remediation Plan Strategy
+
+- **Quick Wins**: Issues that can be fixed in minutes/hours with high impact (e.g., adding alt text, fixing color contrast)
+- **Short Term**: Issues requiring modest development effort (e.g., adding keyboard navigation, ARIA labels)
+- **Long Term**: Issues requiring architectural changes (e.g., rebuilding navigation, redesigning forms)
+
+## Example Issue Entry
+
+```json
+{
+  "ruleId": "wcag-1.4.3-contrast-insufficient",
+  "wcagCriteria": "1.4.3 Contrast (Minimum) (Level AA)",
+  "impact": "SERIOUS",
+  "description": "Button text has insufficient color contrast ratio of 2.8:1",
+  "helpText": "Ensure text has a contrast ratio of at least 4.5:1 for normal text or 3:1 for large text",
+  "helpUrl": "https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html",
+  "htmlSnippet": "<button class=\"cta-button\" style=\"background: #7CB9E8; color: #A4D3EE\">Sign Up</button>",
+  "cssSelector": "button.cta-button",
+  "aiExplanation": "The current color combination (light blue on lighter blue) creates a 2.8:1 contrast ratio, which fails WCAG AA standards. Users with low vision, color blindness, or those viewing in bright sunlight will struggle to read the button text, potentially missing critical CTAs.",
+  "aiFixSuggestion": "Change the button text color to a darker shade. Example: Change color from #A4D3EE to #004B87 (dark blue) which achieves 5.2:1 contrast ratio. \n\nBefore: style=\"background: #7CB9E8; color: #A4D3EE\"\nAfter: style=\"background: #7CB9E8; color: #004B87\"",
+  "aiPriority": 9
+}
+```
+
+## Important Instructions
+
+1. **Analyze Provided Content**: Focus on the HTML content, accessibility tree, and any screenshot provided above
+2. **Be Thorough**: Check all interactive elements, images, forms, navigation, headings, landmarks, and content structure
+3. **Provide Context**: Every issue should include the AI explanation and fix suggestion - don't just report violations, educate on why and how to fix
+4. **Prioritize**: Use the aiPriority field to help developers focus on high-impact issues first
+5. **Be Specific**: Include actual HTML snippets and CSS selectors so developers can locate issues easily
+6. **JSON Only**: Your final response must be ONLY the JSON object, no additional text before or after
+
+## Begin Analysis
+
+Please analyze the website content above and provide the complete JSON report.

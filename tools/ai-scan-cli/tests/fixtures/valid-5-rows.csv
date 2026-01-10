@@ -1,0 +1,6 @@
+scan_id,url,email,wcag_level,issues_json,created_at,page_title
+scan-001,https://example.com,user1@example.com,AA,,2024-01-01T10:00:00Z,
+scan-002,https://test.com,user2@example.com,A,,2024-01-02T10:00:00Z,
+scan-003,https://demo.org,,AAA,,2024-01-03T10:00:00Z,
+scan-004,http://sample.net,user3@example.com,AA,,2024-01-04T10:00:00Z,
+scan-005,https://website.io,,A,,,

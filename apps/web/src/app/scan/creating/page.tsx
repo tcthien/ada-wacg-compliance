@@ -95,6 +95,12 @@ export default function ScanCreatingPage() {
           if (pendingData.pageTitles && Object.keys(pendingData.pageTitles).length > 0) {
             batchRequest.pageTitles = pendingData.pageTitles;
           }
+          if (pendingData.email) {
+            batchRequest.email = pendingData.email;
+          }
+          if (pendingData.aiEnabled) {
+            batchRequest.aiEnabled = pendingData.aiEnabled;
+          }
 
           const result = await batchApi.create(batchRequest);
 

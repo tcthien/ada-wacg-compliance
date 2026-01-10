@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { adminApi } from '@/lib/admin-api';
-import { ArrowLeft, Trash2, RotateCw, AlertCircle, Layers, ExternalLink } from 'lucide-react';
+import { adminApi, AiStatus } from '@/lib/admin-api';
+import { ArrowLeft, Trash2, RotateCw, AlertCircle, Layers, ExternalLink, Sparkles, Clock, Cpu } from 'lucide-react';
 import Link from 'next/link';
 import { AdminScanConsole } from '@/components/admin/ScanConsole';
 import { AdminExportButton } from '@/components/admin/AdminExportButton';
+import { AiStatusBadge, AiSummarySection } from '@/components/features/ai';
 
 /**
  * Admin Scan Detail Page
@@ -41,6 +42,10 @@ interface Issue {
   cssSelector: string | null;
   nodes: any;
   createdAt: string;
+  // AI Enhancement Fields
+  aiExplanation: string | null;
+  aiFixSuggestion: string | null;
+  aiPriority: number | null;
 }
 
 interface ScanResult {
@@ -87,6 +92,17 @@ interface ScanDetails {
   guestSession: GuestSession | null;
   batchScanId: string | null;
   batchScan: BatchContext | null;
+  // AI fields
+  aiEnabled?: boolean;
+  aiStatus?: AiStatus | null;
+  aiSummary?: string | null;
+  aiRemediationPlan?: string | null;
+  aiProcessedAt?: string | null;
+  aiInputTokens?: number | null;
+  aiOutputTokens?: number | null;
+  aiTotalTokens?: number | null;
+  aiModel?: string | null;
+  aiProcessingTime?: number | null;
 }
 
 /**
@@ -422,6 +438,113 @@ export default function ScanDetailPage() {
         </div>
       </div>
 
+      {/* AI Analysis section - shown if AI is enabled */}
+      {scan.aiEnabled && (
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-5 w-5 text-purple-600" />
+            <h2 className="text-xl font-bold text-gray-900">AI Analysis</h2>
+            {scan.aiStatus && (
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                scan.aiStatus === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                scan.aiStatus === 'FAILED' ? 'bg-red-100 text-red-800' :
+                scan.aiStatus === 'PROCESSING' ? 'bg-purple-100 text-purple-800' :
+                'bg-blue-100 text-blue-800'
+              }`}>
+                {scan.aiStatus}
+              </span>
+            )}
+          </div>
+
+          {/* AI Status Badge for non-completed states */}
+          {scan.aiStatus && scan.aiStatus !== 'COMPLETED' && (
+            <div className="mb-4">
+              <AiStatusBadge status={scan.aiStatus} email={scan.email} />
+            </div>
+          )}
+
+          {/* AI Metrics - shown when processing is complete or in progress */}
+          {(scan.aiModel || scan.aiTotalTokens || scan.aiProcessingTime) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Model used */}
+              {scan.aiModel && (
+                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                  <Cpu className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500">Model</label>
+                    <p className="text-sm text-gray-900 font-mono">{scan.aiModel}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tokens used */}
+              {scan.aiTotalTokens !== null && scan.aiTotalTokens !== undefined && (
+                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                  <Sparkles className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500">Tokens Used</label>
+                    <p className="text-sm text-gray-900">
+                      {scan.aiTotalTokens.toLocaleString()}
+                      {scan.aiInputTokens && scan.aiOutputTokens && (
+                        <span className="text-gray-500 ml-1 text-xs">
+                          ({scan.aiInputTokens.toLocaleString()} in / {scan.aiOutputTokens.toLocaleString()} out)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Processing time */}
+              {scan.aiProcessingTime !== null && scan.aiProcessingTime !== undefined && (
+                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                  <Clock className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500">Processing Time</label>
+                    <p className="text-sm text-gray-900">
+                      {scan.aiProcessingTime < 1000
+                        ? `${scan.aiProcessingTime}ms`
+                        : `${(scan.aiProcessingTime / 1000).toFixed(1)}s`}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI processed timestamp */}
+          {scan.aiProcessedAt && (
+            <p className="text-xs text-gray-500 mb-4">
+              Processed at: {formatDate(scan.aiProcessedAt)}
+            </p>
+          )}
+
+          {/* AI Summary Section with accordion */}
+          {scan.aiStatus === 'COMPLETED' && (scan.aiSummary || scan.aiRemediationPlan) && (
+            <AiSummarySection
+              aiSummary={scan.aiSummary ?? null}
+              aiRemediationPlan={scan.aiRemediationPlan ?? null}
+            />
+          )}
+
+          {/* No analysis available message */}
+          {scan.aiStatus === 'COMPLETED' && !scan.aiSummary && !scan.aiRemediationPlan && (
+            <div className="text-center py-4 text-gray-500 text-sm">
+              AI processing completed but no analysis was generated.
+            </div>
+          )}
+
+          {/* Failed state message */}
+          {scan.aiStatus === 'FAILED' && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">
+                AI analysis failed. This may be due to processing limits or temporary service issues.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Batch context section - shown if scan belongs to a batch */}
       {scan.batchScanId && scan.batchScan && (
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
@@ -631,6 +754,43 @@ export default function ScanDetailPage() {
                         Learn more about this issue
                       </a>
                     </div>
+
+                    {/* AI Enhancement Section - Only show if any AI data exists */}
+                    {(issue.aiExplanation || issue.aiFixSuggestion || issue.aiPriority) && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sparkles className="h-4 w-4 text-purple-600" />
+                          <span className="text-sm font-medium text-purple-800">AI Analysis</span>
+                          {issue.aiPriority && (
+                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
+                              Priority: {issue.aiPriority}/10
+                            </span>
+                          )}
+                        </div>
+
+                        {issue.aiExplanation && (
+                          <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              AI Explanation
+                            </label>
+                            <p className="text-sm text-gray-700 bg-purple-50 p-3 rounded whitespace-pre-wrap">
+                              {issue.aiExplanation}
+                            </p>
+                          </div>
+                        )}
+
+                        {issue.aiFixSuggestion && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              AI Fix Suggestion
+                            </label>
+                            <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto whitespace-pre-wrap">
+                              {issue.aiFixSuggestion}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

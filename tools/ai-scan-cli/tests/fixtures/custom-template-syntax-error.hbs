@@ -1,0 +1,10 @@
+Custom Template with Syntax Error
+
+WCAG Level: {{wcagLevel}}
+
+URLs to analyze:
+{{#each scans}}
+- Scan ID: {{this.scanId}}
+  URL: {{this.url}}
+{{/if}}
+<!-- Mismatched block helper (open with each, close with if) causes runtime error -->

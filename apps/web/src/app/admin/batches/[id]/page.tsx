@@ -157,7 +157,19 @@ export default function BatchDetailPage() {
     moderateCount: scan.moderateCount,
     minorCount: scan.minorCount,
     errorMessage: scan.errorMessage,
+    aiEnabled: scan.aiEnabled,
+    aiStatus: scan.aiStatus,
   }));
+
+  // Calculate AI scan statistics
+  const aiEnabledScans = scans.filter((scan) => scan.aiEnabled);
+  const aiStats = aiEnabledScans.length > 0 ? {
+    total: aiEnabledScans.length,
+    pending: aiEnabledScans.filter((s) => s.aiStatus === 'PENDING').length,
+    processing: aiEnabledScans.filter((s) => s.aiStatus === 'PROCESSING' || s.aiStatus === 'DOWNLOADED').length,
+    completed: aiEnabledScans.filter((s) => s.aiStatus === 'COMPLETED').length,
+    failed: aiEnabledScans.filter((s) => s.aiStatus === 'FAILED').length,
+  } : null;
 
   // Transform topCriticalUrls to TopCriticalUrl format for BatchCriticalUrlsCard
   const criticalUrlsForCard: TopCriticalUrl[] = topCriticalUrls.map((url) => ({
@@ -179,6 +191,7 @@ export default function BatchDetailPage() {
         completedAt={batch.completedAt}
         cancelledAt={batch.cancelledAt}
         discoveryId={null}
+        aiStats={aiStats}
       />
 
       {/* Action buttons */}

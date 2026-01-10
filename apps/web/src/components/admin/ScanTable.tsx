@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Scan } from '@/lib/admin-api';
 import {
@@ -180,7 +181,15 @@ export function ScanTable({
   onDelete,
   onRetry
 }: ScanTableProps) {
+  const router = useRouter();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+
+  /**
+   * Handle row click to navigate to scan detail
+   */
+  const handleRowClick = (scanId: string) => {
+    router.push(`/admin/scans/${scanId}`);
+  };
 
   /**
    * Handle column header click for sorting
@@ -352,7 +361,11 @@ export function ScanTable({
           {/* Data Rows */}
           {!loading &&
             sortedScans.map((scan) => (
-              <tr key={scan.id} className="hover:bg-gray-50 transition-colors">
+              <tr
+                key={scan.id}
+                onClick={() => handleRowClick(scan.id)}
+                className="hover:bg-gray-50 transition-colors cursor-pointer"
+              >
                 {/* Status */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <StatusBadge status={scan.status} />
@@ -376,6 +389,7 @@ export function ScanTable({
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 hover:underline"
                     title={scan.url}
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {truncateUrl(scan.url)}
                   </a>
@@ -400,6 +414,7 @@ export function ScanTable({
                         href={`/admin/batches/${scan.batchScanId}`}
                         className="inline-flex items-center justify-center p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title="View batch details"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                         <span className="sr-only">View batch</span>
@@ -418,6 +433,7 @@ export function ScanTable({
                       href={`/admin/scans/${scan.id}`}
                       className="inline-flex items-center justify-center p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                       title="View details"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <Eye className="h-4 w-4" />
                       <span className="sr-only">View</span>
@@ -426,7 +442,10 @@ export function ScanTable({
                     {/* Retry Button (only for failed scans) */}
                     {scan.status === 'FAILED' && (
                       <button
-                        onClick={() => onRetry(scan.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRetry(scan.id);
+                        }}
                         className="inline-flex items-center justify-center p-2 text-green-600 hover:bg-green-50 rounded-md transition-colors"
                         title="Retry scan"
                       >
@@ -437,7 +456,10 @@ export function ScanTable({
 
                     {/* Delete Button */}
                     <button
-                      onClick={() => onDelete(scan.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(scan.id);
+                      }}
                       className="inline-flex items-center justify-center p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
                       title="Delete scan"
                     >

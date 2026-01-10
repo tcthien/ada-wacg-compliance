@@ -22,6 +22,8 @@ export interface CreateBatchRequest {
   recaptchaToken: string;
   discoveryId?: string; // Optional link to discovery session
   pageTitles?: Record<string, string>; // URL -> title mapping
+  email?: string; // Email for AI scan notifications
+  aiEnabled?: boolean; // Enable AI-powered validation
 }
 
 /**
@@ -107,6 +109,10 @@ export interface UrlIssueSummaryDetailed {
   moderateCount: number;
   minorCount: number;
   errorMessage: string | null;
+  /** Whether AI analysis is enabled for this scan */
+  aiEnabled?: boolean;
+  /** Current AI processing status */
+  aiStatus?: 'PENDING' | 'PROCESSING' | 'DOWNLOADED' | 'COMPLETED' | 'FAILED' | null;
 }
 
 /**

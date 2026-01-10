@@ -91,7 +91,8 @@ type BulkDeleteBody = z.infer<typeof bulkDeleteBodySchema>;
  *   "url": "https://example.com",
  *   "email": "user@example.com",
  *   "wcagLevel": "AA",
- *   "recaptchaToken": "abc123..."
+ *   "recaptchaToken": "abc123...",
+ *   "aiEnabled": true
  * }
  *
  * Response 201:
@@ -100,7 +101,8 @@ type BulkDeleteBody = z.infer<typeof bulkDeleteBodySchema>;
  *   "data": {
  *     "scanId": "scan_abc123",
  *     "status": "PENDING",
- *     "url": "https://example.com"
+ *     "url": "https://example.com",
+ *     "aiEnabled": true
  *   }
  * }
  */
@@ -127,6 +129,7 @@ async function createScanHandler(
       url: body.url,
       email: body.email,
       wcagLevel: body.wcagLevel,
+      aiEnabled: body.aiEnabled,
     };
 
     // Create scan via service
@@ -138,6 +141,7 @@ async function createScanHandler(
         scanId: scan.id,
         status: scan.status,
         url: scan.url,
+        aiEnabled: scan.aiEnabled,
       },
     });
   } catch (error) {

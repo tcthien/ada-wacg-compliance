@@ -6,7 +6,8 @@ import { AdminBatchSummary } from '@/lib/admin-api';
 import {
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Trash2
 } from 'lucide-react';
 
 /**
@@ -28,6 +29,8 @@ interface BatchTableProps {
   batches: AdminBatchSummary[];
   /** Loading state - shows skeleton rows when true */
   loading?: boolean;
+  /** Callback when delete button is clicked */
+  onDelete: (batchId: string) => void;
 }
 
 /**
@@ -113,6 +116,9 @@ function SkeletonRow() {
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="h-4 w-32 bg-gray-200 rounded"></div>
       </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="h-8 w-8 bg-gray-200 rounded"></div>
+      </td>
     </tr>
   );
 }
@@ -123,7 +129,7 @@ function SkeletonRow() {
 function EmptyState() {
   return (
     <tr>
-      <td colSpan={5} className="px-6 py-12 text-center">
+      <td colSpan={6} className="px-6 py-12 text-center">
         <div className="flex flex-col items-center justify-center">
           <div className="text-gray-400 mb-2">
             <svg
@@ -170,6 +176,7 @@ function EmptyState() {
 export function BatchTable({
   batches,
   loading = false,
+  onDelete,
 }: BatchTableProps) {
   const router = useRouter();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -372,6 +379,14 @@ export function BatchTable({
                 <SortIcon field="createdAt" currentSort={sortConfig} />
               </div>
             </th>
+
+            {/* Actions Column */}
+            <th
+              scope="col"
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -429,6 +444,24 @@ export function BatchTable({
                 {/* Created Date */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {formatDate(batch.createdAt)}
+                </td>
+
+                {/* Actions */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    {/* Delete Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(batch.id);
+                      }}
+                      className="inline-flex items-center justify-center p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                      title="Delete batch"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

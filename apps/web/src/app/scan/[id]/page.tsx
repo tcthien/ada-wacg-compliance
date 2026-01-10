@@ -75,7 +75,7 @@ export default function ScanResultPage() {
 
   // Poll for AI status if AI is enabled
   const { aiStatus } = useAiScanStatus(scanId, {
-    initialInterval: 30000, // 30 seconds
+    initialInterval: 60000, // 60 seconds
     maxInterval: 120000, // 2 minutes
   });
 
@@ -246,9 +246,12 @@ export default function ScanResultPage() {
     // Use the current stage text
     const stageText = currentStage.text;
 
+    // Use wider container when AI is pending for better display
+    const containerWidth = isAiPending ? 'max-w-xl' : 'max-w-md';
+
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="max-w-md w-full">
+        <div className={`${containerWidth} w-full`}>
           <div className="text-center mb-8">
             <div className="animate-pulse text-6xl mb-4">🔍</div>
             <h1 className="text-2xl font-bold mb-2">Scanning in Progress</h1>

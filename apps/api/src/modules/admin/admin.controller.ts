@@ -1339,6 +1339,17 @@ async function getScanDetailsHandler(
       completedAt: scan.completedAt?.toISOString() ?? null,
       durationMs: scan.durationMs,
       errorMessage: scan.errorMessage,
+      // AI fields
+      aiEnabled: scan.aiEnabled,
+      aiStatus: scan.aiStatus,
+      aiSummary: scan.aiSummary,
+      aiRemediationPlan: scan.aiRemediationPlan,
+      aiProcessedAt: scan.aiProcessedAt?.toISOString() ?? null,
+      aiInputTokens: scan.aiInputTokens,
+      aiOutputTokens: scan.aiOutputTokens,
+      aiTotalTokens: scan.aiTotalTokens,
+      aiModel: scan.aiModel,
+      aiProcessingTime: scan.aiProcessingTime,
       scanResult: scan.scanResult
         ? {
             id: scan.scanResult.id,
@@ -1362,6 +1373,10 @@ async function getScanDetailsHandler(
               cssSelector: issue.cssSelector,
               nodes: issue.nodes,
               createdAt: issue.createdAt.toISOString(),
+              // AI Enhancement Fields
+              aiExplanation: issue.aiExplanation,
+              aiFixSuggestion: issue.aiFixSuggestion,
+              aiPriority: issue.aiPriority,
             })),
           }
         : null,

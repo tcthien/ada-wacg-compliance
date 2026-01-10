@@ -102,7 +102,35 @@ export const CreateBatchRequestSchema = z.object({
     required_error: 'reCAPTCHA token is required',
     invalid_type_error: 'reCAPTCHA token must be a string',
   }),
-});
+
+  /**
+   * Email address for AI scan report delivery
+   * Required when aiEnabled is true
+   */
+  email: z
+    .string()
+    .transform((email) => email.trim().toLowerCase())
+    .pipe(z.string().email('Invalid email format'))
+    .optional(),
+
+  /**
+   * Enable AI-powered validation for scan results
+   * When enabled, email is required for report delivery
+   */
+  aiEnabled: z.boolean().optional(),
+}).refine(
+  (data) => {
+    // Email is required when AI validation is enabled
+    if (data.aiEnabled === true && !data.email) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Email is required when AI validation is enabled',
+    path: ['email'],
+  },
+);
 
 /**
  * Schema for batch scan status response

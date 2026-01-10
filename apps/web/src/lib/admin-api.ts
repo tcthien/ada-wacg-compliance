@@ -82,6 +82,27 @@ export interface Scan {
   batchScanId: string | null;
   /** Batch homepage URL for display */
   batchHomepageUrl?: string | null;
+  // AI fields (returned in detail view)
+  /** Whether AI analysis is enabled for this scan */
+  aiEnabled?: boolean;
+  /** Current AI processing status */
+  aiStatus?: AiStatus | null;
+  /** AI-generated executive summary */
+  aiSummary?: string | null;
+  /** AI-generated remediation plan */
+  aiRemediationPlan?: string | null;
+  /** When AI processing completed */
+  aiProcessedAt?: string | null;
+  /** Input tokens used by AI */
+  aiInputTokens?: number | null;
+  /** Output tokens used by AI */
+  aiOutputTokens?: number | null;
+  /** Total tokens used by AI */
+  aiTotalTokens?: number | null;
+  /** AI model used for processing */
+  aiModel?: string | null;
+  /** AI processing time in seconds */
+  aiProcessingTime?: number | null;
 }
 
 // Alias for backward compatibility with components using userEmail
@@ -280,6 +301,10 @@ export interface AdminBatchScan {
   errorMessage: string | null;
   completedAt: string | null;
   createdAt: string;
+  /** Whether AI analysis is enabled for this scan */
+  aiEnabled: boolean;
+  /** Current AI processing status */
+  aiStatus: AiStatus | null;
 }
 
 /**

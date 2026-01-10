@@ -6,7 +6,7 @@ import { BatchFilters, BatchFilterState } from '@/components/admin/BatchFilters'
 import { BatchSummaryBar } from '@/components/admin/BatchSummaryBar';
 import { BatchTable } from '@/components/admin/BatchTable';
 import { useAdminBatches } from '@/hooks/useAdminBatches';
-import { BatchStatus } from '@/lib/admin-api';
+import { BatchStatus, adminApi } from '@/lib/admin-api';
 
 /**
  * Admin Batch Management Page
@@ -118,6 +118,22 @@ export default function AdminBatchesPage() {
   };
 
   /**
+   * Handle batch deletion with confirmation
+   */
+  const handleDelete = async (batchId: string) => {
+    if (!confirm('Are you sure you want to delete this batch? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await adminApi.batches.delete(batchId);
+      refetch();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete batch');
+    }
+  };
+
+  /**
    * Calculate total pages
    */
   const totalPages = pagination.totalPages;
@@ -169,7 +185,7 @@ export default function AdminBatchesPage() {
       )}
 
       {/* Batch table */}
-      <BatchTable batches={batches || []} loading={isLoading} />
+      <BatchTable batches={batches || []} loading={isLoading} onDelete={handleDelete} />
 
       {/* Pagination controls */}
       {!isLoading && pagination.total > 0 && (

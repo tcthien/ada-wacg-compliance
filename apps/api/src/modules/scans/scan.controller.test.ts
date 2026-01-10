@@ -67,6 +67,7 @@ describe('Scan Controller', () => {
         errorMessage: null,
         createdAt: new Date(),
         completedAt: null,
+        aiEnabled: false,
       });
 
       const response = await app.inject({
@@ -86,6 +87,7 @@ describe('Scan Controller', () => {
         scanId: 'scan_abc123',
         status: 'PENDING',
         url: 'https://example.com',
+        aiEnabled: false,
       });
 
       // Verify service was called with correct params
@@ -93,6 +95,7 @@ describe('Scan Controller', () => {
         url: 'https://example.com',
         wcagLevel: 'AA',
         email: undefined,
+        aiEnabled: undefined,
       });
     });
 
@@ -193,6 +196,92 @@ describe('Scan Controller', () => {
         url: 'https://example.com',
         email: 'user@example.com',
         wcagLevel: 'AA',
+      });
+    });
+
+    it('should include aiEnabled when provided', async () => {
+      vi.mocked(scanService.createScan).mockResolvedValue({
+        id: 'scan_abc123',
+        guestSessionId: 'session-123',
+        userId: null,
+        url: 'https://example.com',
+        email: 'user@example.com',
+        status: 'PENDING',
+        wcagLevel: 'AA',
+        durationMs: null,
+        errorMessage: null,
+        createdAt: new Date(),
+        completedAt: null,
+        aiEnabled: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/scans',
+        payload: {
+          url: 'https://example.com',
+          email: 'user@example.com',
+          wcagLevel: 'AA',
+          aiEnabled: true,
+          recaptchaToken: 'test-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const json = response.json();
+      expect(json.success).toBe(true);
+      expect(json.data).toEqual({
+        scanId: 'scan_abc123',
+        status: 'PENDING',
+        url: 'https://example.com',
+        aiEnabled: true,
+      });
+
+      // Verify service was called with aiEnabled
+      expect(scanService.createScan).toHaveBeenCalledWith('session-123', {
+        url: 'https://example.com',
+        email: 'user@example.com',
+        wcagLevel: 'AA',
+        aiEnabled: true,
+      });
+    });
+
+    it('should default aiEnabled to undefined when not provided', async () => {
+      vi.mocked(scanService.createScan).mockResolvedValue({
+        id: 'scan_abc123',
+        guestSessionId: 'session-123',
+        userId: null,
+        url: 'https://example.com',
+        email: null,
+        status: 'PENDING',
+        wcagLevel: 'AA',
+        durationMs: null,
+        errorMessage: null,
+        createdAt: new Date(),
+        completedAt: null,
+        aiEnabled: false,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/scans',
+        payload: {
+          url: 'https://example.com',
+          wcagLevel: 'AA',
+          recaptchaToken: 'test-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const json = response.json();
+      expect(json.data.aiEnabled).toBe(false);
+
+      // Verify service was called without aiEnabled
+      expect(scanService.createScan).toHaveBeenCalledWith('session-123', {
+        url: 'https://example.com',
+        wcagLevel: 'AA',
+        email: undefined,
+        aiEnabled: undefined,
       });
     });
   });
@@ -627,6 +716,7 @@ describe('Scan Controller', () => {
         errorMessage: null,
         createdAt: new Date(),
         completedAt: null,
+        aiEnabled: false,
       });
 
       const response = await app.inject({

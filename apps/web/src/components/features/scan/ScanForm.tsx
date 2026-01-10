@@ -309,6 +309,8 @@ export function ScanForm({ onScanStarted, onScanSuccess, className, initialUrls 
           pageTitles,
           homepageUrl,
           timestamp: Date.now(),
+          email: emailConsent && email.trim() ? email.trim() : undefined,
+          aiEnabled: aiEnabled || undefined,
         };
 
         sessionStorage.setItem('pendingScanData', JSON.stringify(pendingScanData));

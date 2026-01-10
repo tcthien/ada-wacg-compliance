@@ -12,7 +12,8 @@ import {
   type CsvImportRow,
 } from './ai-campaign.schema.js';
 import { deductTokens } from './ai-campaign.service.js';
-import { addEmailJob } from '../../shared/queue/queue.service.js';
+import { sendEmailQueue } from '../../shared/queue/queues.js';
+import type { EmailJobData } from '../../shared/queue/types.js';
 import type { ImportResult } from './ai-campaign.types.js';
 
 /**
@@ -715,23 +716,23 @@ export async function importAiResults(csv: string): Promise<ImportResult> {
 
         if (scan?.email) {
           try {
-            await addEmailJob(
-              scan.email,
-              'ai-scan-complete',
-              {
-                scanId: row.scan_id,
-                url: scan.url,
-                aiSummary: row.ai_summary,
-                tokensUsed: row.tokens_used,
-                aiModel: row.ai_model,
+            // Use correct EmailJobData format expected by send-email processor
+            const emailJobData: EmailJobData = {
+              scanId: row.scan_id,
+              email: scan.email,
+              type: 'ai_scan_complete',
+            };
+
+            const emailJob = await sendEmailQueue.add('send-email', emailJobData, {
+              attempts: 5,
+              backoff: {
+                type: 'exponential',
+                delay: 2000,
               },
-              {
-                subject: 'Your AI-Enhanced Accessibility Scan is Ready',
-              }
-            );
+            });
 
             console.log(
-              `✅ AI Queue Service: Queued email notification for scan ${row.scan_id} to ${scan.email}`
+              `✅ AI Queue Service: Queued email notification for scan ${row.scan_id} to ${scan.email} (job: ${emailJob.id})`
             );
           } catch (emailError) {
             // Log email queue failure but don't fail the import

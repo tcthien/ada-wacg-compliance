@@ -128,6 +128,10 @@ export interface ScanWithIssueCount {
   errorMessage: string | null;
   completedAt: Date | null;
   createdAt: Date;
+  /** Whether AI analysis is enabled for this scan */
+  aiEnabled: boolean;
+  /** Current AI processing status */
+  aiStatus: string | null;
 }
 
 /**
@@ -403,7 +407,7 @@ export async function getBatchDetails(
       );
     }
 
-    // Transform scans to include issue counts
+    // Transform scans to include issue counts and AI status
     const scansWithCounts: ScanWithIssueCount[] = batch.scans.map(scan => ({
       id: scan.id,
       url: scan.url,
@@ -417,6 +421,8 @@ export async function getBatchDetails(
       errorMessage: scan.errorMessage,
       completedAt: scan.completedAt,
       createdAt: scan.createdAt,
+      aiEnabled: scan.aiEnabled,
+      aiStatus: scan.aiStatus,
     }));
 
     // Calculate aggregate statistics

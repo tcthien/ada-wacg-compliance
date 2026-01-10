@@ -11,6 +11,8 @@ import {
   XCircle,
   Clock,
   AlertCircle,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UrlIssueSummaryDetailed } from '@/lib/batch-api';
@@ -50,8 +52,37 @@ function SkeletonRow() {
 
 /**
  * Status badge component
+ * Shows AI-aware status when scan is completed but AI processing is pending
  */
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  status,
+  aiEnabled,
+  aiStatus,
+}: {
+  status: string;
+  aiEnabled?: boolean | undefined;
+  aiStatus?: string | null | undefined;
+}) {
+  // AI status configurations (purple theme)
+  const aiStatusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+    PENDING: {
+      label: 'Awaiting AI',
+      className: 'bg-purple-100 text-purple-800 border-purple-300',
+      icon: <Sparkles className="h-3 w-3" />,
+    },
+    PROCESSING: {
+      label: 'AI Processing',
+      className: 'bg-purple-100 text-purple-800 border-purple-300',
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    },
+    DOWNLOADED: {
+      label: 'AI Processing',
+      className: 'bg-purple-100 text-purple-800 border-purple-300',
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    },
+  };
+
+  // Regular status configurations
   const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
     PENDING: {
       label: 'Pending',
@@ -75,6 +106,31 @@ function StatusBadge({ status }: { status: string }) {
     },
   };
 
+  // If scan completed but AI is still processing, show AI-specific status
+  if (
+    status === 'COMPLETED' &&
+    aiEnabled &&
+    aiStatus &&
+    aiStatus !== 'COMPLETED' &&
+    aiStatus !== 'FAILED'
+  ) {
+    const aiConfig = aiStatusConfig[aiStatus];
+    if (aiConfig) {
+      return (
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border',
+            aiConfig.className
+          )}
+        >
+          {aiConfig.icon}
+          {aiConfig.label}
+        </span>
+      );
+    }
+  }
+
+  // Regular status badge
   const config = statusConfig[status] || {
     label: status,
     className: 'bg-gray-100 text-gray-800 border-gray-300',
@@ -233,7 +289,11 @@ function ScanRow({ scan, isHighlighted = false }: ScanRowProps) {
 
           {/* Status and Issue Count */}
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
-            <StatusBadge status={scan.status} />
+            <StatusBadge
+              status={scan.status}
+              aiEnabled={scan.aiEnabled}
+              aiStatus={scan.aiStatus}
+            />
 
             {scan.status === 'COMPLETED' && (
               <div className="flex items-center gap-2">

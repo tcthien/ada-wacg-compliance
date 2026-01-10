@@ -228,6 +228,8 @@ export async function createScan(
             status: scan.status,
             url: scan.url,
             createdAt: scan.createdAt.toISOString(),
+            aiEnabled: scan.aiEnabled,
+            email: scan.email ?? null,
           })
         ),
         redis.setex(progressKey, RedisKeys.SCAN_PROGRESS.ttl, '0'),

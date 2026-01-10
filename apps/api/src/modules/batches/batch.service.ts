@@ -22,8 +22,12 @@ import {
   type CreateScanData,
   ScanRepositoryError,
 } from '../scans/scan.repository.js';
-import type { BatchScan, WcagLevel, Scan, ScanResult } from '@prisma/client';
+import type { BatchScan, WcagLevel, Scan, ScanResult, AiStatus } from '@prisma/client';
 import { getPrismaClient } from '../../config/database.js';
+import {
+  checkAndReserveSlotAtomic,
+  AiCampaignServiceError,
+} from '../ai-campaign/ai-campaign.service.js';
 
 /**
  * Batch Service Error
@@ -50,6 +54,8 @@ export interface CreateBatchInput {
   guestSessionId?: string;
   userId?: string;
   discoveryId?: string;
+  email?: string;
+  aiEnabled?: boolean;
 }
 
 /**
@@ -188,14 +194,55 @@ export async function createBatch(
 
     for (const url of validatedUrls) {
       try {
+        // Handle AI opt-in: check slot availability and reserve atomically
+        let aiEnabled = false;
+        let aiStatus: AiStatus | undefined = undefined;
+
+        if (input.aiEnabled) {
+          try {
+            // Create a temporary scan ID for slot reservation
+            const tempScanId = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            const reservation = await checkAndReserveSlotAtomic(tempScanId);
+
+            if (reservation.reserved) {
+              aiEnabled = true;
+              aiStatus = 'PENDING';
+              console.log(
+                `✅ Batch Service: AI slot reserved for URL ${url} - remaining=${reservation.slotsRemaining}`
+              );
+            } else {
+              // Slot reservation failed - disable AI for this scan
+              aiEnabled = false;
+              aiStatus = undefined;
+              console.warn(
+                `⚠️  Batch Service: AI slot reservation failed for ${url} - reason=${reservation.reason}`
+              );
+            }
+          } catch (error) {
+            // If slot reservation fails due to service error, log and continue without AI
+            if (error instanceof AiCampaignServiceError) {
+              console.error(
+                `❌ Batch Service: AI campaign service error for ${url}: ${error.message}`
+              );
+            } else {
+              console.error(`❌ Batch Service: Unexpected error during AI slot reservation for ${url}:`, error);
+            }
+            // Fallback to non-AI scan on error
+            aiEnabled = false;
+            aiStatus = undefined;
+          }
+        }
+
         const scanData: CreateScanData = {
           url,
           wcagLevel: input.wcagLevel ?? 'AA',
           guestSessionId: input.guestSessionId ?? null,
           userId: input.userId ?? null,
-          email: null, // Batch scans don't collect email per URL
+          email: input.email ?? null, // Use batch email for all scans
           batchId: batch.id, // Link scan to batch
           pageTitle: null, // Will be extracted during scanning
+          aiEnabled,
+          aiStatus,
         };
 
         // Create scan record in database with batchId
@@ -661,6 +708,7 @@ export interface BatchListResponse {
   batches: Array<{
     id: string;
     homepageUrl: string;
+    wcagLevel: WcagLevel;
     totalUrls: number;
     status: string;
     completedCount: number;
@@ -747,6 +795,7 @@ export async function listBatches(
       batches: paginatedBatches.map((batch) => ({
         id: batch.id,
         homepageUrl: batch.homepageUrl,
+        wcagLevel: batch.wcagLevel,
         totalUrls: batch.totalUrls,
         status: batch.status,
         completedCount: batch.completedCount,

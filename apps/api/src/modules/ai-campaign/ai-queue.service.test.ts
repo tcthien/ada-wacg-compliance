@@ -18,7 +18,7 @@ import type { AiStatus, Scan, ScanResult, Issue } from '@prisma/client';
 // Mock dependencies before imports
 vi.mock('../../config/database.js');
 vi.mock('./ai-campaign.service.js');
-vi.mock('../../shared/queue/queue.service.js');
+vi.mock('../../shared/queue/queues.js');
 
 // Now safe to import
 import {
@@ -35,7 +35,7 @@ import {
 } from './ai-queue.service.js';
 import { getPrismaClient } from '../../config/database.js';
 import { deductTokens } from './ai-campaign.service.js';
-import { addEmailJob } from '../../shared/queue/queue.service.js';
+import { sendEmailQueue } from '../../shared/queue/queues.js';
 
 describe('AI Queue Service', () => {
   let mockPrismaClient: any;
@@ -100,7 +100,7 @@ describe('AI Queue Service', () => {
     vi.mocked(getPrismaClient).mockReturnValue(mockPrismaClient);
 
     // Mock email job queue
-    vi.mocked(addEmailJob).mockResolvedValue('job-123');
+    vi.mocked(sendEmailQueue.add).mockResolvedValue({ id: 'job-123' } as any);
 
     // Mock token deduction
     vi.mocked(deductTokens).mockResolvedValue({
@@ -387,15 +387,17 @@ describe('AI Queue Service', () => {
   // ============================================================================
 
   describe('importAiResults', () => {
+    // Valid UUID and content meeting minimum length requirements
+    const testScanId = '550e8400-e29b-41d4-a716-446655440000';
     const validCsv = `scan_id,ai_summary,ai_remediation_plan,ai_issues_json,tokens_used,ai_model,processing_time
-"scan-123","Summary","Plan","[]",4500,"claude-3-opus",45`;
+"${testScanId}","Summary of accessibility issues found during scan.","Step 1: Fix color contrast. Step 2: Add alt text to images.","[]",4500,"claude-3-opus",45`;
 
     it('should import valid CSV successfully', async () => {
       // Arrange
       mockPrismaClient.scan.findUnique.mockImplementation(async ({ where }: any) => {
-        if (where.id === 'scan-123') {
+        if (where.id === testScanId) {
           return {
-            id: 'scan-123',
+            id: testScanId,
             aiEnabled: true,
             aiStatus: 'DOWNLOADED',
             email: 'user@example.com',
@@ -419,7 +421,7 @@ describe('AI Queue Service', () => {
     it('should update scan with AI results', async () => {
       // Arrange
       mockPrismaClient.scan.findUnique.mockResolvedValue({
-        id: 'scan-123',
+        id: testScanId,
         aiEnabled: true,
         aiStatus: 'DOWNLOADED',
         email: 'user@example.com',
@@ -432,10 +434,10 @@ describe('AI Queue Service', () => {
 
       // Assert
       expect(mockPrismaClient.scan.update).toHaveBeenCalledWith({
-        where: { id: 'scan-123' },
+        where: { id: testScanId },
         data: expect.objectContaining({
-          aiSummary: 'Summary',
-          aiRemediationPlan: 'Plan',
+          aiSummary: 'Summary of accessibility issues found during scan.',
+          aiRemediationPlan: 'Step 1: Fix color contrast. Step 2: Add alt text to images.',
           aiStatus: 'COMPLETED',
           aiTotalTokens: 4500,
           aiModel: 'claude-3-opus',
@@ -456,13 +458,13 @@ describe('AI Queue Service', () => {
       expect(result.processed).toBe(0);
       expect(result.failed).toBe(1);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]!.scanId).toBe('scan-123');
+      expect(result.errors[0]!.scanId).toBe(testScanId);
     });
 
     it('should queue email notification for completed scans', async () => {
       // Arrange
       mockPrismaClient.scan.findUnique.mockResolvedValue({
-        id: 'scan-123',
+        id: testScanId,
         aiEnabled: true,
         aiStatus: 'DOWNLOADED',
         email: 'user@example.com',
@@ -473,23 +475,25 @@ describe('AI Queue Service', () => {
       // Act
       await importAiResults(validCsv);
 
-      // Assert
-      expect(addEmailJob).toHaveBeenCalledWith(
-        'user@example.com',
-        'ai-scan-complete',
+      // Assert - verify correct EmailJobData format
+      expect(sendEmailQueue.add).toHaveBeenCalledWith(
+        'send-email',
+        {
+          scanId: testScanId,
+          email: 'user@example.com',
+          type: 'ai_scan_complete',
+        },
         expect.objectContaining({
-          scanId: 'scan-123',
-          url: 'https://example.com',
-          aiSummary: 'Summary',
-        }),
-        expect.any(Object)
+          attempts: 5,
+          backoff: expect.objectContaining({ type: 'exponential' }),
+        })
       );
     });
 
     it('should deduct tokens from campaign', async () => {
       // Arrange
       mockPrismaClient.scan.findUnique.mockResolvedValue({
-        id: 'scan-123',
+        id: testScanId,
         aiEnabled: true,
         aiStatus: 'DOWNLOADED',
         email: 'user@example.com',
@@ -501,26 +505,28 @@ describe('AI Queue Service', () => {
       await importAiResults(validCsv);
 
       // Assert
-      expect(deductTokens).toHaveBeenCalledWith('scan-123', 4500);
+      expect(deductTokens).toHaveBeenCalledWith(testScanId, 4500);
     });
 
     it('should handle partial success with multiple rows', async () => {
-      // Arrange
+      // Arrange - use valid UUIDs
+      const scanId1 = '550e8400-e29b-41d4-a716-446655440001';
+      const scanId2 = '550e8400-e29b-41d4-a716-446655440002';
       const multiRowCsv = `scan_id,ai_summary,ai_remediation_plan,ai_issues_json,tokens_used,ai_model,processing_time
-"scan-1","Summary 1","Plan 1","[]",1000,"claude-3-opus",10
-"scan-2","Summary 2","Plan 2","[]",2000,"claude-3-opus",20`;
+"${scanId1}","Summary of first scan accessibility issues.","Step 1: Fix color contrast issues.","[]",1000,"claude-3-opus",10
+"${scanId2}","Summary of second scan accessibility issues.","Step 2: Add alt text to images.","[]",2000,"claude-3-opus",20`;
 
       mockPrismaClient.scan.findUnique.mockImplementation(async ({ where }: any) => {
-        if (where.id === 'scan-1') {
+        if (where.id === scanId1) {
           return {
-            id: 'scan-1',
+            id: scanId1,
             aiEnabled: true,
             aiStatus: 'DOWNLOADED',
             email: 'user@example.com',
             url: 'https://example.com',
           };
         }
-        return null; // scan-2 not found
+        return null; // scanId2 not found
       });
       mockPrismaClient.scan.update.mockResolvedValue({});
 
@@ -531,20 +537,20 @@ describe('AI Queue Service', () => {
       expect(result.success).toBe(false); // Partial failure
       expect(result.processed).toBe(1);
       expect(result.failed).toBe(1);
-      expect(result.tokensDeducted).toBe(1000); // Only scan-1's tokens
+      expect(result.tokensDeducted).toBe(1000); // Only first scan's tokens
     });
 
     it('should not fail import if email queue fails', async () => {
       // Arrange
       mockPrismaClient.scan.findUnique.mockResolvedValue({
-        id: 'scan-123',
+        id: testScanId,
         aiEnabled: true,
         aiStatus: 'DOWNLOADED',
         email: 'user@example.com',
         url: 'https://example.com',
       });
       mockPrismaClient.scan.update.mockResolvedValue({});
-      vi.mocked(addEmailJob).mockRejectedValue(new Error('Email queue error'));
+      vi.mocked(sendEmailQueue.add).mockRejectedValue(new Error('Email queue error'));
 
       // Act
       const result = await importAiResults(validCsv);
@@ -557,7 +563,7 @@ describe('AI Queue Service', () => {
     it('should not fail import if token deduction fails', async () => {
       // Arrange
       mockPrismaClient.scan.findUnique.mockResolvedValue({
-        id: 'scan-123',
+        id: testScanId,
         aiEnabled: true,
         aiStatus: 'DOWNLOADED',
         email: 'user@example.com',

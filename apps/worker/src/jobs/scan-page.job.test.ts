@@ -24,11 +24,13 @@ import { ScanStage } from '../utils/progress-tracker.js';
 // Mock Prisma client
 const mockPrismaUpdate = vi.fn();
 const mockPrismaCreate = vi.fn();
+const mockPrismaFindUnique = vi.fn();
 
 vi.mock('../config/prisma.js', () => ({
   default: vi.fn(() => ({
     scan: {
       update: mockPrismaUpdate,
+      findUnique: mockPrismaFindUnique,
     },
     scanResult: {
       create: mockPrismaCreate,
@@ -159,6 +161,8 @@ describe('processScanPageJob', () => {
     mockUpdateScanProgress.mockResolvedValue(undefined);
     // By default, scans don't belong to a batch (return null)
     mockNotifyScanComplete.mockResolvedValue(null);
+    // By default, scans are not AI-enabled (return aiEnabled: false)
+    mockPrismaFindUnique.mockResolvedValue({ aiEnabled: false });
   });
 
   afterEach(() => {
@@ -289,48 +293,39 @@ describe('processScanPageJob', () => {
     });
   });
 
-  it('should NOT queue email for scans under 30 seconds', async () => {
-    // Mock fast scan (under 30s)
-    const fastScanResult = { ...mockScanResult, scanDuration: 5000 };
-    mockScanPage.mockResolvedValue(fastScanResult);
+  it('should NOT queue email for AI-enabled scans', async () => {
+    // Mock AI-enabled scan
+    mockPrismaFindUnique.mockResolvedValue({ aiEnabled: true });
 
     const mockJob = { data: mockJobData } as Job<ScanPageJobData>;
     const consoleSpy = vi.spyOn(console, 'log');
 
     await processScanPageJob(mockJob);
 
-    // Should NOT queue email notification
+    // Should NOT queue scan_complete email for AI-enabled scans
+    // They will receive ai_scan_complete email when AI processing completes
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Skipping scan_complete email for AI-enabled scan')
+    );
     expect(consoleSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining('scan_complete')
+      expect.stringContaining('Queued scan_complete')
     );
 
     consoleSpy.mockRestore();
   });
 
-  it('should queue email for scans over 30 seconds', async () => {
-    // Mock slow scan (over 30s) by delaying
-    // We need to delay the actual processing, not just the scan
-    const originalDateNow = Date.now;
-    let startTime = 0;
-
-    // Override Date.now to simulate passage of time
-    vi.spyOn(Date, 'now').mockImplementation(() => {
-      if (startTime === 0) {
-        startTime = originalDateNow();
-        return startTime;
-      }
-      // Return a time 31 seconds later
-      return startTime + 31000;
-    });
+  it('should queue email for non-AI scans with email provided', async () => {
+    // Non-AI scans should receive scan_complete email
+    mockPrismaFindUnique.mockResolvedValue({ aiEnabled: false });
 
     const mockJob = { data: mockJobData } as Job<ScanPageJobData>;
     const consoleSpy = vi.spyOn(console, 'log');
 
     await processScanPageJob(mockJob);
 
-    // Should queue email notification
+    // Should queue email notification for non-AI scans
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('scan_complete')
+      expect.stringContaining('Queued scan_complete')
     );
 
     consoleSpy.mockRestore();

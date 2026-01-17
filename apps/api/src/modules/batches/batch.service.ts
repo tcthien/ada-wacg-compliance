@@ -28,6 +28,7 @@ import {
   checkAndReserveSlotAtomic,
   AiCampaignServiceError,
 } from '../ai-campaign/ai-campaign.service.js';
+import { FREE_TIER_QUOTAS } from '../../shared/constants/quotas.js';
 
 /**
  * Batch Service Error
@@ -127,9 +128,9 @@ export async function createBatch(
       );
     }
 
-    if (input.urls.length > 50) {
+    if (input.urls.length > FREE_TIER_QUOTAS.MAX_URLS_PER_BATCH) {
       throw new BatchServiceError(
-        'Batch size limit exceeded (maximum 50 URLs)',
+        `Batch size limit exceeded (maximum ${FREE_TIER_QUOTAS.MAX_URLS_PER_BATCH} URLs for free tier)`,
         'BATCH_SIZE_EXCEEDED'
       );
     }
@@ -170,6 +171,37 @@ export async function createBatch(
       );
     }
 
+    // Validate AI quotas if AI is enabled
+    if (input.aiEnabled) {
+      // Check AI batch limit (max AI URLs per batch)
+      if (validatedUrls.length > FREE_TIER_QUOTAS.MAX_AI_URLS_PER_BATCH) {
+        throw new BatchServiceError(
+          `AI batch limit exceeded (maximum ${FREE_TIER_QUOTAS.MAX_AI_URLS_PER_BATCH} AI URLs per batch for free tier)`,
+          'AI_BATCH_LIMIT_EXCEEDED'
+        );
+      }
+
+      // Check daily AI limit
+      const sessionId = input.guestSessionId || input.userId || '';
+      if (sessionId) {
+        const dailyUsage = await checkDailyAiQuota(sessionId);
+        const remainingDaily = FREE_TIER_QUOTAS.MAX_AI_URLS_PER_DAY - dailyUsage;
+
+        if (remainingDaily < validatedUrls.length) {
+          throw new BatchServiceError(
+            `Daily AI limit exceeded (${dailyUsage}/${FREE_TIER_QUOTAS.MAX_AI_URLS_PER_DAY} used today). ` +
+            `${Math.max(0, remainingDaily)} AI scans remaining. Resets at midnight UTC.`,
+            'DAILY_AI_LIMIT_EXCEEDED'
+          );
+        }
+
+        console.log(
+          `✅ Batch Service: AI quota check passed - daily usage: ${dailyUsage}/${FREE_TIER_QUOTAS.MAX_AI_URLS_PER_DAY}, ` +
+          `requesting: ${validatedUrls.length}`
+        );
+      }
+    }
+
     // Determine homepage URL (use first URL if not provided)
     const homepageUrl = input.homepageUrl ?? validatedUrls[0]!;
 
@@ -191,6 +223,7 @@ export async function createBatch(
 
     // Step 3: Create individual Scan records for each URL (Requirement 1.4)
     const scans: Array<{ id: string; url: string; status: string }> = [];
+    let aiEnabledCount = 0; // Track AI-enabled scans for daily quota
 
     for (const url of validatedUrls) {
       try {
@@ -207,6 +240,7 @@ export async function createBatch(
             if (reservation.reserved) {
               aiEnabled = true;
               aiStatus = 'PENDING';
+              aiEnabledCount++; // Track for daily quota
               console.log(
                 `✅ Batch Service: AI slot reserved for URL ${url} - remaining=${reservation.slotsRemaining}`
               );
@@ -269,6 +303,14 @@ export async function createBatch(
     console.log(
       `✅ Batch Service: Created ${scans.length} individual scans for batch ${batch.id}`
     );
+
+    // Increment daily AI quota if any AI-enabled scans were created
+    if (aiEnabledCount > 0) {
+      const sessionId = input.guestSessionId || input.userId || '';
+      if (sessionId) {
+        await incrementDailyAiQuota(sessionId, aiEnabledCount);
+      }
+    }
 
     // Step 4: Queue all scan jobs (Requirement 1.5)
     const queuedJobs: string[] = [];
@@ -1056,4 +1098,65 @@ export async function cancelBatch(
     console.error('❌ Batch Service: Failed to cancel batch:', err.message);
     throw new BatchServiceError('Failed to cancel batch', 'CANCEL_FAILED', err);
   }
+}
+
+/**
+ * Check daily AI quota usage for a session
+ *
+ * @param sessionId - Guest session ID or user ID
+ * @returns Number of AI URLs used today
+ */
+async function checkDailyAiQuota(sessionId: string): Promise<number> {
+  try {
+    const redis = getRedisClient();
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const key = RedisKeys.AI_QUOTA_DAILY.build(sessionId, today);
+    const count = await redis.get(key);
+    return count ? parseInt(count, 10) : 0;
+  } catch (error) {
+    console.error('❌ Batch Service: Failed to check daily AI quota:', error);
+    return 0; // Fail open
+  }
+}
+
+/**
+ * Increment daily AI quota usage for a session
+ *
+ * @param sessionId - Guest session ID or user ID
+ * @param count - Number of AI URLs to add
+ */
+async function incrementDailyAiQuota(sessionId: string, count: number): Promise<void> {
+  try {
+    const redis = getRedisClient();
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const key = RedisKeys.AI_QUOTA_DAILY.build(sessionId, today);
+
+    const pipeline = redis.pipeline();
+    pipeline.incrby(key, count);
+    pipeline.expire(key, RedisKeys.AI_QUOTA_DAILY.ttl);
+    await pipeline.exec();
+
+    console.log(`✅ Batch Service: Incremented daily AI quota for ${sessionId} by ${count}`);
+  } catch (error) {
+    console.error('❌ Batch Service: Failed to increment daily AI quota:', error);
+  }
+}
+
+/**
+ * Get remaining daily AI quota for a session
+ *
+ * @param sessionId - Guest session ID or user ID
+ * @returns Remaining AI URLs available today
+ */
+export async function getRemainingDailyAiQuota(sessionId: string): Promise<{
+  used: number;
+  remaining: number;
+  limit: number;
+}> {
+  const used = await checkDailyAiQuota(sessionId);
+  return {
+    used,
+    remaining: Math.max(0, FREE_TIER_QUOTAS.MAX_AI_URLS_PER_DAY - used),
+    limit: FREE_TIER_QUOTAS.MAX_AI_URLS_PER_DAY,
+  };
 }

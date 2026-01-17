@@ -56,8 +56,11 @@ export interface DownloaderOptions {
   /** Whether to capture accessibility snapshot (default: true) */
   captureAccessibility?: boolean;
 
-  /** Timeout for page load in milliseconds (default: 30000) */
+  /** Timeout for page load in milliseconds (default: 60000) */
   timeout?: number;
+
+  /** Number of retries for failed page loads (default: 3) */
+  retries?: number;
 
   /** Whether to run browser in headless mode (default: true) */
   headless?: boolean;
@@ -92,7 +95,8 @@ export class WebsiteDownloader {
       outputDir: options.outputDir ?? join(__dirname, '..', 'tmp-web-src'),
       captureScreenshot: options.captureScreenshot ?? true,
       captureAccessibility: options.captureAccessibility ?? true,
-      timeout: options.timeout ?? 30000,
+      timeout: options.timeout ?? 60000,
+      retries: options.retries ?? 3,
       headless: options.headless ?? true,
       logger: options.logger,
     };
@@ -132,106 +136,124 @@ export class WebsiteDownloader {
   }
 
   /**
-   * Download a single website
+   * Download a single website with retry logic
    */
   async downloadSite(scan: PendingScan): Promise<DownloadedSite> {
     const startTime = Date.now();
+    let lastError: string = '';
 
     if (!this.browser) {
       await this.initialize();
     }
 
-    const page = await this.browser!.newPage();
+    // Retry loop
+    for (let attempt = 1; attempt <= this.options.retries; attempt++) {
+      const page = await this.browser!.newPage();
 
-    try {
-      this.options.logger?.info(`Downloading: ${scan.url}`);
+      try {
+        if (attempt === 1) {
+          this.options.logger?.info(`Downloading: ${scan.url}`);
+        } else {
+          this.options.logger?.info(`Retrying (${attempt}/${this.options.retries}): ${scan.url}`);
+        }
 
-      // Navigate to the URL
-      await page.goto(scan.url, {
-        waitUntil: 'networkidle',
-        timeout: this.options.timeout,
-      });
-
-      // Wait a bit for any dynamic content
-      await page.waitForTimeout(1000);
-
-      // Get page title
-      const pageTitle = await page.title();
-
-      // Get HTML content
-      const htmlContent = await page.content();
-
-      // Ensure output directory exists
-      const scanDir = await this.ensureOutputDir(scan.scanId);
-
-      // Save HTML
-      const htmlPath = join(scanDir, 'index.html');
-      await writeFile(htmlPath, htmlContent, 'utf-8');
-
-      // Capture screenshot if enabled
-      let screenshotPath: string | undefined;
-      if (this.options.captureScreenshot) {
-        screenshotPath = join(scanDir, 'screenshot.png');
-        await page.screenshot({
-          path: screenshotPath,
-          fullPage: true,
+        // Navigate to the URL
+        await page.goto(scan.url, {
+          waitUntil: 'networkidle',
+          timeout: this.options.timeout,
         });
-      }
 
-      // Capture accessibility snapshot if enabled
-      let accessibilitySnapshot: string | undefined;
-      if (this.options.captureAccessibility) {
-        try {
-          // Use aria-snapshot method (newer API) if available
-          // Falls back gracefully if not supported
-          const ariaSnapshot = await page.locator(':root').ariaSnapshot();
-          if (ariaSnapshot) {
-            accessibilitySnapshot = ariaSnapshot;
-            await writeFile(
-              join(scanDir, 'accessibility.txt'),
-              accessibilitySnapshot,
-              'utf-8'
-            );
+        // Wait a bit for any dynamic content
+        await page.waitForTimeout(1000);
+
+        // Get page title
+        const pageTitle = await page.title();
+
+        // Get HTML content
+        const htmlContent = await page.content();
+
+        // Ensure output directory exists
+        const scanDir = await this.ensureOutputDir(scan.scanId);
+
+        // Save HTML
+        const htmlPath = join(scanDir, 'index.html');
+        await writeFile(htmlPath, htmlContent, 'utf-8');
+
+        // Capture screenshot if enabled
+        let screenshotPath: string | undefined;
+        if (this.options.captureScreenshot) {
+          screenshotPath = join(scanDir, 'screenshot.png');
+          await page.screenshot({
+            path: screenshotPath,
+            fullPage: true,
+          });
+        }
+
+        // Capture accessibility snapshot if enabled
+        let accessibilitySnapshot: string | undefined;
+        if (this.options.captureAccessibility) {
+          try {
+            // Use aria-snapshot method (newer API) if available
+            // Falls back gracefully if not supported
+            const ariaSnapshot = await page.locator(':root').ariaSnapshot();
+            if (ariaSnapshot) {
+              accessibilitySnapshot = ariaSnapshot;
+              await writeFile(
+                join(scanDir, 'accessibility.txt'),
+                accessibilitySnapshot,
+                'utf-8'
+              );
+            }
+          } catch (error) {
+            // Accessibility snapshot may fail on some pages, continue anyway
+            this.options.logger?.warning(`Could not capture accessibility snapshot for ${scan.url}`);
           }
-        } catch (error) {
-          // Accessibility snapshot may fail on some pages, continue anyway
-          this.options.logger?.warning(`Could not capture accessibility snapshot for ${scan.url}`);
+        }
+
+        const durationMs = Date.now() - startTime;
+        this.options.logger?.success(`Downloaded ${scan.url} in ${durationMs}ms`);
+
+        await page.close();
+        return {
+          scanId: scan.scanId,
+          url: scan.url,
+          wcagLevel: scan.wcagLevel,
+          pageTitle,
+          htmlContent,
+          screenshotPath,
+          accessibilitySnapshot,
+          success: true,
+          durationMs,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        await page.close();
+
+        if (attempt < this.options.retries) {
+          // Wait before retry with exponential backoff: 5s, 10s, 20s
+          const delay = 5000 * Math.pow(2, attempt - 1);
+          this.options.logger?.warning(
+            `Failed to download ${scan.url}: ${lastError}. Waiting ${delay / 1000}s before retry...`
+          );
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
-
-      const durationMs = Date.now() - startTime;
-      this.options.logger?.success(`Downloaded ${scan.url} in ${durationMs}ms`);
-
-      return {
-        scanId: scan.scanId,
-        url: scan.url,
-        wcagLevel: scan.wcagLevel,
-        pageTitle,
-        htmlContent,
-        screenshotPath,
-        accessibilitySnapshot,
-        success: true,
-        durationMs,
-      };
-    } catch (error) {
-      const durationMs = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      this.options.logger?.error(`Failed to download ${scan.url}: ${errorMessage}`);
-
-      return {
-        scanId: scan.scanId,
-        url: scan.url,
-        wcagLevel: scan.wcagLevel,
-        pageTitle: '',
-        htmlContent: '',
-        success: false,
-        error: errorMessage,
-        durationMs,
-      };
-    } finally {
-      await page.close();
     }
+
+    // All retries exhausted
+    const durationMs = Date.now() - startTime;
+    this.options.logger?.error(`Failed to download ${scan.url} after ${this.options.retries} attempts: ${lastError}`);
+
+    return {
+      scanId: scan.scanId,
+      url: scan.url,
+      wcagLevel: scan.wcagLevel,
+      pageTitle: '',
+      htmlContent: '',
+      success: false,
+      error: lastError,
+      durationMs,
+    };
   }
 
   /**

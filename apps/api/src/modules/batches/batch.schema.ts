@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { WcagLevelSchema } from '../scans/scan.schema.js';
+import { FREE_TIER_QUOTAS } from '../../shared/constants/quotas.js';
 
 /**
  * Zod schema for batch scan status values
@@ -19,15 +20,17 @@ export const BatchStatusSchema = z.enum(
  * Schema for creating a new batch scan request
  *
  * Validates:
- * - Array of 1-50 URLs (RFC 3986 compliant, HTTP/HTTPS only)
+ * - Array of 1-5 URLs for free tier (RFC 3986 compliant, HTTP/HTTPS only)
  * - WCAG conformance level
  * - reCAPTCHA token for spam prevention
  *
  * Requirements:
- * - 1.2: System SHALL accept 1-50 URLs in a single batch request
+ * - 1.2: System SHALL accept 1-5 URLs in a single batch request (free tier)
  * - 1.3: System SHALL validate all URLs before creating scan jobs
  * - 1.7: System SHALL validate URLs are well-formed (RFC 3986 compliant)
- * - 1.8: System SHALL reject batches containing 0 or >50 URLs
+ * - 1.8: System SHALL reject batches containing 0 or >5 URLs (free tier)
+ *
+ * @see docs/quota-limits-specification.md for quota details
  *
  * @example
  * ```ts
@@ -46,7 +49,7 @@ export const BatchStatusSchema = z.enum(
 export const CreateBatchRequestSchema = z.object({
   /**
    * Array of URLs to scan for accessibility issues
-   * Must contain 1-50 valid HTTP/HTTPS URLs
+   * Must contain 1-5 valid HTTP/HTTPS URLs (free tier limit)
    */
   urls: z
     .array(
@@ -77,7 +80,7 @@ export const CreateBatchRequestSchema = z.object({
       },
     )
     .min(1, 'At least 1 URL is required')
-    .max(50, 'Maximum 50 URLs allowed per batch')
+    .max(FREE_TIER_QUOTAS.MAX_URLS_PER_BATCH, `Maximum ${FREE_TIER_QUOTAS.MAX_URLS_PER_BATCH} URLs allowed per batch (free tier)`)
     .refine(
       (urls) => {
         // Check for duplicate URLs (case-insensitive)

@@ -8,6 +8,78 @@ The AI Scan CLI is a command-line tool that automates batch processing of pendin
 
 **Use Case**: Batch processing pending AI scans exported from the ADAShield admin panel using Claude Code for automated WCAG compliance analysis.
 
+## Build & Run Guide
+
+### Step 1: Install Dependencies
+
+```bash
+cd tools/ai-scan-cli
+pnpm install
+```
+
+### Step 2: Build the CLI
+
+```bash
+pnpm build
+```
+
+This compiles TypeScript to JavaScript in the `dist/` directory.
+
+### Step 3: Run the CLI
+
+**Option A: Using npm scripts**
+```bash
+# Run with default options
+pnpm start -- --input /path/to/scans.csv
+
+# Development mode (build + run)
+pnpm dev -- --input /path/to/scans.csv --verbose
+```
+
+**Option B: Direct node execution**
+```bash
+node dist/cli.js --input /path/to/scans.csv --output ./results/
+```
+
+**Option C: Global installation**
+```bash
+# Link globally (one-time setup)
+pnpm link --global
+
+# Then run from anywhere
+ai-scan-cli --input /path/to/scans.csv
+```
+
+### Available npm Scripts
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `pnpm build` | `tsc` | Compile TypeScript to JavaScript |
+| `pnpm start` | `node dist/cli.js` | Run the compiled CLI |
+| `pnpm dev` | `tsc && node dist/cli.js` | Build and run in one step |
+| `pnpm test` | `vitest` | Run tests in watch mode |
+| `pnpm test:run` | `vitest run` | Run tests once |
+| `pnpm lint` | `eslint src --ext .ts` | Lint source files |
+
+### Common Run Examples
+
+```bash
+# Basic scan with output directory
+pnpm start -- -i pending-scans.csv -o ./results/
+
+# Verbose mode (see detailed progress and prompts)
+pnpm start -- -i pending-scans.csv -o ./results/ --verbose
+
+# Process 1 URL at a time (recommended for testing)
+pnpm start -- -i pending-scans.csv -m 1 --verbose
+
+# Dry run - preview batch plan without processing
+pnpm start -- -i pending-scans.csv --dry-run
+
+# Check prerequisites before running
+pnpm start -- --check-prerequisites
+```
+
 ## Prerequisites
 
 Before using this tool, ensure you have the following installed and configured:
@@ -171,6 +243,40 @@ scan-002,https://test.com,A,
 - `--verbose` and `--quiet` are mutually exclusive
 - `--resume` and `--clear-checkpoint` are mutually exclusive
 - Mini-batch size must be between 1-10 (Claude context window limitation)
+
+## Configuration
+
+### Default Timeouts and Retries
+
+The CLI uses the following default configuration for page downloads:
+
+| Setting | Default Value | Description |
+|---------|---------------|-------------|
+| Page load timeout | 60 seconds | Max time to wait for a page to load |
+| Download retries | 3 attempts | Number of retry attempts for failed page loads |
+| Retry backoff | 5s, 10s, 20s | Exponential backoff delays between retries |
+| Claude analysis timeout | 180 seconds | Max time for Claude to analyze a mini-batch |
+| Mini-batch delay | 5 seconds | Delay between processing mini-batches |
+
+### Modifying Configuration
+
+To change timeout or retry settings, edit the source files and rebuild:
+
+**Page download settings** (`src/website-downloader.ts`):
+```typescript
+// In constructor defaults
+timeout: options.timeout ?? 60000,  // Page load timeout in ms
+retries: options.retries ?? 3,      // Number of retry attempts
+```
+
+**Mini-batch processor settings** (`src/mini-batch-processor.ts`):
+```typescript
+// In WebsiteDownloader initialization
+timeout: 60000,  // 60 seconds timeout
+retries: 3,      // 3 retries for failed page loads
+```
+
+After modifying, rebuild with `pnpm build`.
 
 ## Usage Examples
 
@@ -468,13 +574,20 @@ When using `--resume`, a checkpoint file tracks processing progress.
 
 ### Timeout Errors
 
-**Symptom**: Scans failing with `TIMEOUT` error type
+**Symptom**: Scans failing with `TIMEOUT` or `URL_UNREACHABLE` error type
+
+**Current Configuration**:
+- Page load timeout: **60 seconds** (per URL)
+- Automatic retries: **3 attempts** with exponential backoff (5s, 10s, 20s delays)
+- Claude analysis timeout: **180 seconds** (per mini-batch)
 
 **Solution**:
 1. Check network connectivity
-2. Verify URLs are accessible
-3. Increase timeout in code (default: 180 seconds / 3 minutes)
-4. Retry failed scans from `failed-scans-{timestamp}.csv`
+2. Verify URLs are accessible (try opening in browser)
+3. For slow-loading pages, the 60-second timeout should be sufficient
+4. The CLI will automatically retry failed downloads up to 3 times
+5. If still failing, check `failed-scans-{timestamp}.csv` for specific errors
+6. To modify timeouts, edit `src/website-downloader.ts` and rebuild
 
 ### Out of Memory
 

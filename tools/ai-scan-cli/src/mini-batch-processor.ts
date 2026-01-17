@@ -164,7 +164,8 @@ export class MiniBatchProcessor {
     this.downloader = new WebsiteDownloader({
       captureScreenshot: true,
       captureAccessibility: true,
-      timeout: 30000,
+      timeout: 60000,  // 60 seconds timeout
+      retries: 3,      // 3 retries for failed page loads
       headless: true,
       logger: this.logger,
     });

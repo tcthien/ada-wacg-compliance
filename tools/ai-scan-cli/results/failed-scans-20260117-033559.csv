@@ -1,0 +1,5 @@
+"scan_id","url","error_type","error_message"
+"ce947457-0a4a-4fb2-8e05-2d589135ef04","https://coc-layout.com/base/6500-trophy-th18-legend-league-base-4-anti-meteor-golem-coc-layout","URL_UNREACHABLE","page.goto: Timeout 30000ms exceeded.
+Call log:
+[2m  - navigating to ""https://coc-layout.com/base/6500-trophy-th18-legend-league-base-4-anti-meteor-golem-coc-layout"", waiting until ""networkidle""[22m
+"

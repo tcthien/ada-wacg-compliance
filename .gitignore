@@ -65,3 +65,4 @@ Thumbs.db
 .credential/adashield-prod-0c2377859697.json
 .*.pid
 tools/ai-scan-cli/node_modules
+.worker.pid

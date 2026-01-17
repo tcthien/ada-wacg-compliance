@@ -197,9 +197,9 @@ describe('Batch Service', () => {
       });
     });
 
-    it('should reject batch with more than 50 URLs (Requirement 1.8)', async () => {
-      // Arrange
-      const tooManyUrls = Array.from({ length: 51 }, (_, i) => `https://example.com/page${i}`);
+    it('should reject batch with more than 5 URLs (free tier quota)', async () => {
+      // Arrange - 6 URLs exceeds the free tier limit of 5
+      const tooManyUrls = Array.from({ length: 6 }, (_, i) => `https://example.com/page${i}`);
       const invalidInput: CreateBatchInput = {
         urls: tooManyUrls,
         guestSessionId: 'session-123',
@@ -209,7 +209,7 @@ describe('Batch Service', () => {
       await expect(createBatch(invalidInput)).rejects.toThrow(BatchServiceError);
       await expect(createBatch(invalidInput)).rejects.toMatchObject({
         code: 'BATCH_SIZE_EXCEEDED',
-        message: 'Batch size limit exceeded (maximum 50 URLs)',
+        message: 'Batch size limit exceeded (maximum 5 URLs for free tier)',
       });
     });
 

@@ -188,6 +188,18 @@ export const RedisKeys = {
     build: (scanId: string) => `ai_scan:${scanId}:status`,
     ttl: 86400, // 24 hours
   },
+
+  /**
+   * AI daily quota tracking per session
+   * Pattern: ai_quota_daily:{sessionId}:{date}
+   * TTL: 24 hours (86400 seconds)
+   * Usage: Track AI URLs scanned per session per day (max 10 for free tier)
+   */
+  AI_QUOTA_DAILY: {
+    pattern: 'ai_quota_daily',
+    build: (sessionId: string, date: string) => `ai_quota_daily:${sessionId}:${date}`,
+    ttl: 86400, // 24 hours
+  },
 } as const;
 
 /**

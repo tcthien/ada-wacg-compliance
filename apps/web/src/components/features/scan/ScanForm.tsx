@@ -20,6 +20,7 @@ import { WcagLevelSelector } from './WcagLevelSelector';
 import { BatchUrlTable, type BatchUrl } from '../batch/BatchUrlTable';
 import { cn } from '@/lib/utils';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { FREE_TIER_QUOTAS, QUOTA_ERROR_MESSAGES } from '@/lib/constants/quotas';
 
 interface DiscoveredPage {
   id: string;
@@ -224,6 +225,26 @@ export function ScanForm({ onScanStarted, onScanSuccess, className, initialUrls 
         // Batch mode validation
         if (batchUrls.length === 0) {
           throw new Error('Please select at least one URL to scan');
+        }
+
+        // Quota validation for batch mode
+        if (batchUrls.length > FREE_TIER_QUOTAS.MAX_URLS_PER_BATCH) {
+          throw new Error(
+            QUOTA_ERROR_MESSAGES.BATCH_SIZE_EXCEEDED(
+              batchUrls.length,
+              FREE_TIER_QUOTAS.MAX_URLS_PER_BATCH
+            )
+          );
+        }
+
+        // AI quota validation for batch mode
+        if (aiEnabled && batchUrls.length > FREE_TIER_QUOTAS.MAX_AI_URLS_PER_BATCH) {
+          throw new Error(
+            QUOTA_ERROR_MESSAGES.AI_BATCH_LIMIT_EXCEEDED(
+              batchUrls.length,
+              FREE_TIER_QUOTAS.MAX_AI_URLS_PER_BATCH
+            )
+          );
         }
       } else {
         // Single URL mode validation

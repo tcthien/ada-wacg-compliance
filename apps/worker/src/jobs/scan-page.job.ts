@@ -236,8 +236,21 @@ export async function processScanPageJob(
     }
 
     // Queue email notification if email provided
+    // Skip email for AI-enabled scans - they will receive email when AI processing completes
+    // This prevents GDPR nullification of email before AI results can be sent
     if (email) {
-      await queueEmailNotification(scanId, email, 'scan_complete');
+      const scanRecord = await prisma.scan.findUnique({
+        where: { id: scanId },
+        select: { aiEnabled: true },
+      });
+
+      if (!scanRecord?.aiEnabled) {
+        await queueEmailNotification(scanId, email, 'scan_complete');
+      } else {
+        console.log(
+          `📧 Skipping scan_complete email for AI-enabled scan ${scanId} - will send when AI processing completes`
+        );
+      }
     }
 
     return {
@@ -293,6 +306,7 @@ export async function processScanPageJob(
     }
 
     // Queue failure notification email if provided
+    // For failed scans, always send email (AI processing won't happen anyway)
     if (email) {
       await queueEmailNotification(scanId, email, 'scan_failed');
     }

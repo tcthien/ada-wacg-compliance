@@ -34,12 +34,16 @@ export class SMTPProvider implements EmailProvider {
   constructor(config: SMTPConfig) {
     this.fromEmail = config.fromEmail;
 
+    // When secure is explicitly false, also disable STARTTLS for plain SMTP servers like Mailpit
+    const useTLS = config.secure ?? false;
+
     this.transporter = createTransport({
       host: config.host,
       port: config.port,
-      secure: config.secure ?? false,
+      secure: useTLS,
       auth: config.auth,
-      // For Mailpit and local dev, we don't need TLS verification
+      // For Mailpit and local dev, completely disable TLS
+      ignoreTLS: !useTLS,
       tls: {
         rejectUnauthorized: false,
       },

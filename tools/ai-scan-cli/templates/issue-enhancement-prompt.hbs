@@ -92,10 +92,15 @@ You MUST provide your response as a JSON object with this exact structure:
   - What the issue is
   - Which users are affected (screen reader users, keyboard-only users, etc.)
   - Real-world impact (what task becomes difficult or impossible)
-- **aiFixSuggestion**: Actionable fix with:
+- **aiFixSuggestion**: Actionable fix with PROPER FORMATTING:
+  - Use `\n` for line breaks between sections
+  - Use `\n\n` for paragraph breaks
+  - **REQUIRED**: Wrap ALL code examples in markdown triple backticks (```)
+  - Use `Before:` and `After:` labels for code comparisons
+  - Include the language identifier after opening backticks (e.g., ```html, ```css)
   - Step-by-step instructions when applicable
-  - Before/after code examples when the issue has an HTML snippet
   - Alternative approaches if multiple solutions exist
+  - Include full URLs to external resources (e.g., https://webaim.org/resources/contrastchecker/)
 - **aiPriority**: Integer 1-10 based on:
   - **10**: Critical - blocks core functionality for users with disabilities
   - **8-9**: Serious - significantly impairs experience
@@ -122,10 +127,17 @@ Your enhancement should be:
 {
   "issueId": "abc123-uuid-from-db",
   "aiExplanation": "This image is missing alternative text (alt attribute), which means screen reader users will not know what the image represents. Since this appears to be a logo in the header, it may contain important brand information or serve as navigation. Without alt text, screen reader users hear only 'image' or the unhelpful filename 'logo.png', creating confusion and potentially hiding key site navigation.",
-  "aiFixSuggestion": "Add descriptive alt text that conveys the image's purpose. For a logo that links to the home page, include the company name and indicate it's a home link.\n\nBefore:\n<img src=\"logo.png\" class=\"header-logo\">\n\nAfter:\n<img src=\"logo.png\" class=\"header-logo\" alt=\"Acme Corp - Home\">\n\nIf the image is purely decorative, use an empty alt attribute: alt=\"\"",
+  "aiFixSuggestion": "Add descriptive alt text that conveys the image's purpose. For a logo that links to the home page, include the company name and indicate it's a home link.\n\nBefore:\n```html\n<img src=\"logo.png\" class=\"header-logo\">\n```\n\nAfter:\n```html\n<img src=\"logo.png\" class=\"header-logo\" alt=\"Acme Corp - Home\">\n```\n\nIf the image is purely decorative, use an empty alt attribute: `alt=\"\"`",
   "aiPriority": 9
 }
 ```
+
+**IMPORTANT FORMATTING RULES for aiFixSuggestion**:
+1. Always wrap code in triple backticks with language identifier
+2. Use `Before:` and `After:` as section labels
+3. Use double newlines (`\n\n`) before and after code blocks
+4. Use single backticks for inline code references (e.g., `alt=""`)
+5. Include full URLs for external tools (e.g., https://webaim.org/resources/contrastchecker/)
 
 ## Important Instructions
 

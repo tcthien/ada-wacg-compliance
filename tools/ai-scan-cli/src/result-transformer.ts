@@ -2,10 +2,15 @@ import type { ScanResult, ImportRow, AiIssueEnhancement } from './types.js';
 
 /**
  * Convert summary object to plain text string
- * @param summary Summary from Claude (can be string or object)
+ * @param summary Summary from Claude (can be string, object, null, or undefined)
  * @returns Plain text summary
  */
-function formatSummary(summary: string | object): string {
+function formatSummary(summary: string | object | null | undefined): string {
+  // Handle null/undefined
+  if (summary === null || summary === undefined) {
+    return '';
+  }
+
   if (typeof summary === 'string') {
     return summary;
   }
@@ -40,10 +45,15 @@ function formatSummary(summary: string | object): string {
 
 /**
  * Convert remediation plan object to plain text string
- * @param plan Remediation plan from Claude (can be string or object)
+ * @param plan Remediation plan from Claude (can be string, object, null, or undefined)
  * @returns Plain text remediation plan
  */
-function formatRemediationPlan(plan: string | object): string {
+function formatRemediationPlan(plan: string | object | null | undefined): string {
+  // Handle null/undefined
+  if (plan === null || plan === undefined) {
+    return '';
+  }
+
   if (typeof plan === 'string') {
     return plan;
   }
@@ -92,13 +102,19 @@ function estimateTokensUsed(result: ScanResult): number {
   const inputEstimate = 2000; // Base prompt size estimate
 
   // Estimate output tokens based on response size
-  const summarySize = typeof result.summary === 'string'
-    ? result.summary.length
-    : JSON.stringify(result.summary).length;
+  // Handle undefined/null summary
+  const summarySize = result.summary
+    ? (typeof result.summary === 'string'
+      ? result.summary.length
+      : JSON.stringify(result.summary).length)
+    : 0;
 
-  const planSize = typeof result.remediationPlan === 'string'
-    ? result.remediationPlan.length
-    : JSON.stringify(result.remediationPlan).length;
+  // Handle undefined/null remediationPlan
+  const planSize = result.remediationPlan
+    ? (typeof result.remediationPlan === 'string'
+      ? result.remediationPlan.length
+      : JSON.stringify(result.remediationPlan).length)
+    : 0;
 
   // Use enhancements if available, otherwise fallback to issues
   const issuesOrEnhancements = result.aiEnhancements ?? result.issues;

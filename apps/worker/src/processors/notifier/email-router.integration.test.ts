@@ -234,7 +234,9 @@ describe('EmailRouter Integration Tests', () => {
 
       expect(router.hasProvider('SENDGRID')).toBe(true);
       expect(router.hasProvider('SES')).toBe(true);
-      expect(router.providerCount).toBe(2);
+      // When SMTP_FROM is set, SMTP provider is also initialized
+      expect(router.hasProvider('SMTP')).toBe(true);
+      expect(router.providerCount).toBe(3);
     });
 
     it('should use default AWS region us-east-1 when not specified', async () => {
@@ -670,7 +672,9 @@ describe('EmailRouter Integration Tests', () => {
 
       expect(router.hasProvider('SES')).toBe(true);
       expect(router.hasProvider('SENDGRID')).toBe(false);
-      expect(router.providerCount).toBe(1);
+      // When SMTP_FROM is set, SMTP provider is also initialized
+      expect(router.hasProvider('SMTP')).toBe(true);
+      expect(router.providerCount).toBe(2);
 
       mockSESSend.mockResolvedValue({ messageId: 'ses-only-001' });
 

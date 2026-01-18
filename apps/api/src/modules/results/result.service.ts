@@ -9,6 +9,7 @@ import { getFixGuideByRuleId } from '@adashield/core/utils';
 import type { FixGuide } from '@adashield/core/constants';
 import type { Issue, IssueImpact, WcagLevel } from '@adashield/core/types';
 import { getScanById, type ScanWithResult } from '../scans/scan.repository.js';
+import { coverageService, type CoverageMetrics, type AiStatus } from './coverage.service.js';
 
 /**
  * Coverage disclaimer for automated testing limitations
@@ -98,6 +99,11 @@ export interface ResultMetadata {
 }
 
 /**
+ * Re-export CoverageMetrics for API consumers
+ */
+export type { CoverageMetrics };
+
+/**
  * Formatted scan result with enriched issues and metadata
  */
 export interface FormattedResult {
@@ -115,6 +121,8 @@ export interface FormattedResult {
   issuesByImpact: IssuesByImpact;
   /** Additional metadata about the scan */
   metadata: ResultMetadata;
+  /** Coverage metrics for trust indicators */
+  coverage: CoverageMetrics;
 }
 
 /**
@@ -264,6 +272,18 @@ export function formatResult(scanResult: ScanWithResult): FormattedResult {
   const scanDuration = scanResult.durationMs ??
     (scanResult.completedAt.getTime() - scanResult.createdAt.getTime());
 
+  // Calculate coverage metrics
+  const coverage = coverageService.calculateCoverage(
+    {
+      passedChecks: scanResult.scanResult.passedChecks,
+      inapplicableChecks: scanResult.scanResult.inapplicableChecks,
+    },
+    scanResult.scanResult.issues as unknown as Issue[],
+    scanResult.wcagLevel,
+    scanResult.aiEnabled ?? false,
+    (scanResult.aiStatus as AiStatus) ?? null
+  );
+
   // Build formatted result
   const formattedResult: FormattedResult = {
     scanId: scanResult.id,
@@ -279,6 +299,7 @@ export function formatResult(scanResult: ScanWithResult): FormattedResult {
       scanDuration,
       inapplicableChecks: scanResult.scanResult.inapplicableChecks,
     },
+    coverage,
   };
 
   return formattedResult;

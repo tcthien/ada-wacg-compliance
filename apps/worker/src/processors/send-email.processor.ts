@@ -368,19 +368,25 @@ export async function processSendEmail(
     await job.updateProgress(80);
 
     // 5. Nullify email in database (GDPR compliance)
-    await prisma.scan.update({
-      where: { id: scanId },
-      data: { email: null },
-    });
-
-    console.log(`🔒 Email address nullified for GDPR compliance`);
+    // Skip nullification if AI is enabled - email will be nullified after ai_scan_complete email
+    let emailNullified = false;
+    if (scan.aiEnabled) {
+      console.log(`⏳ Skipping email nullification - AI processing pending (will nullify after AI email)`);
+    } else {
+      await prisma.scan.update({
+        where: { id: scanId },
+        data: { email: null },
+      });
+      emailNullified = true;
+      console.log(`🔒 Email address nullified for GDPR compliance`);
+    }
 
     // Update job progress: Complete
     await job.updateProgress(100);
 
     const result: SendEmailJobResult = {
       sent: true,
-      emailNullified: true,
+      emailNullified,
       messageId,
       provider: providerUsed,
     };

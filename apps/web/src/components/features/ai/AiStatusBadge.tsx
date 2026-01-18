@@ -245,7 +245,7 @@ export function AiStatusBadge({ status, email, onRetry, className }: AiStatusBad
         {/* Time estimate */}
         <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
           <Clock className="h-3 w-3" />
-          <span>Usually takes 1-3 minutes</span>
+          <span>Results delivered within 24 hours</span>
         </div>
       </div>
     </div>

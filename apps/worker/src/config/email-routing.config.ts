@@ -113,7 +113,10 @@ const emailRoutingEnvSchema = z.object({
   // SMTP configuration (for Mailpit, local dev, etc.)
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().default(1025),
-  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_SECURE: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
 });
 
 /**

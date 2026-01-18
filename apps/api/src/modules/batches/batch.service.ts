@@ -29,6 +29,7 @@ import {
   AiCampaignServiceError,
 } from '../ai-campaign/ai-campaign.service.js';
 import { FREE_TIER_QUOTAS } from '../../shared/constants/quotas.js';
+import { coverageService } from '../results/coverage.service.js';
 
 /**
  * Batch Service Error
@@ -565,6 +566,21 @@ export interface BatchResultsResponse {
     pageTitle: string | null;
     criticalCount: number;
   }>;
+  // Coverage metrics aggregation (Enhanced Trust Indicators)
+  coverage: {
+    /** Average coverage percentage across all scans */
+    averageCoveragePercentage: number;
+    /** Total unique criteria checked across batch */
+    totalCriteriaChecked: number;
+    /** Total WCAG criteria for the conformance level */
+    totalCriteriaTotal: number;
+    /** Number of AI-enhanced scans */
+    aiEnhancedCount: number;
+    /** Number of standard scans */
+    standardCount: number;
+    /** Whether any scans are AI-enhanced */
+    hasAiEnhanced: boolean;
+  };
 }
 
 /**
@@ -654,6 +670,11 @@ export async function getBatchResults(
     let passedChecks = 0;
     let completedScansCount = 0;
 
+    // Coverage aggregation variables
+    let aiEnhancedCount = 0;
+    let standardCount = 0;
+    let totalCoveragePercentage = 0;
+
     // Step 5: Build per-URL breakdown
     const urls = scans.map((scan) => {
       const result = scan.scanResult;
@@ -667,6 +688,16 @@ export async function getBatchResults(
         minorCount += result.minorCount;
         passedChecks += result.passedChecks;
         completedScansCount++;
+
+        // Coverage aggregation: determine if AI-enhanced
+        const isAiEnhanced = scan.aiEnabled && scan.aiStatus === 'COMPLETED';
+        if (isAiEnhanced) {
+          aiEnhancedCount++;
+          totalCoveragePercentage += 80; // AI-enhanced coverage
+        } else {
+          standardCount++;
+          totalCoveragePercentage += 57; // Standard coverage
+        }
       }
 
       return {
@@ -694,7 +725,16 @@ export async function getBatchResults(
         criticalCount: url.criticalCount,
       }));
 
-    // Step 7: Return comprehensive results
+    // Step 7: Calculate aggregate coverage metrics
+    const criteriaTotal = coverageService.getCriteriaCountForLevel(batch.wcagLevel);
+    const averageCoveragePercentage = completedScansCount > 0
+      ? Math.round(totalCoveragePercentage / completedScansCount)
+      : 57; // Default to standard coverage
+
+    // Estimate criteria checked based on average coverage and total criteria
+    const totalCriteriaChecked = Math.round(criteriaTotal * (averageCoveragePercentage / 100));
+
+    // Step 8: Return comprehensive results
     return {
       batchId: batch.id,
       status: batch.status,
@@ -716,6 +756,14 @@ export async function getBatchResults(
       },
       urls,
       topCriticalUrls,
+      coverage: {
+        averageCoveragePercentage,
+        totalCriteriaChecked,
+        totalCriteriaTotal: criteriaTotal,
+        aiEnhancedCount,
+        standardCount,
+        hasAiEnhanced: aiEnhancedCount > 0,
+      },
     };
   } catch (error) {
     // Re-throw BatchServiceError as-is

@@ -106,6 +106,34 @@ export interface ResultMetadata {
   inapplicableChecks: number;
 }
 
+/**
+ * Coverage breakdown by criteria status
+ */
+export interface CoverageBreakdown {
+  /** Number of criteria with issues found */
+  criteriaWithIssues: number;
+  /** Number of criteria that passed */
+  criteriaPassed: number;
+  /** Number of criteria not testable by automation */
+  criteriaNotTestable: number;
+}
+
+/**
+ * Coverage metrics for scan results
+ */
+export interface CoverageMetrics {
+  /** Coverage percentage (57 for standard, 80 for AI-enhanced) */
+  coveragePercentage: number;
+  /** Number of unique WCAG criteria checked */
+  criteriaChecked: number;
+  /** Total WCAG criteria for the conformance level */
+  criteriaTotal: number;
+  /** Whether the scan is AI-enhanced */
+  isAiEnhanced: boolean;
+  /** Breakdown by criteria status */
+  breakdown: CoverageBreakdown;
+}
+
 export interface ScanResultResponse {
   scanId: string;
   url: string;
@@ -121,6 +149,8 @@ export interface ScanResultResponse {
   };
   issuesByImpact: IssuesByImpact;
   metadata: ResultMetadata;
+  /** Coverage metrics for trust indicators (optional for backward compatibility) */
+  coverage?: CoverageMetrics;
 }
 
 export interface ScanListResponse {

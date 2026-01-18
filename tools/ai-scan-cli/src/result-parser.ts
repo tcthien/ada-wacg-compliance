@@ -3,15 +3,96 @@ import type { ScanResult, Issue, ImpactLevel, AiIssueEnhancement } from './types
 
 /**
  * Extracts JSON from markdown code blocks
+ * Handles nested code blocks inside JSON strings by using greedy matching
  * @param output - Raw Claude Code output that may contain markdown
  * @returns Extracted JSON string or null if not found
  */
 export function extractJsonFromMarkdown(output: string): string | null {
-  const markdownPattern = /```(?:json)?\s*([\s\S]*?)```/;
-  const match = output.match(markdownPattern);
+  // Strategy 1: Find ```json block and extract to the LAST closing ```
+  // This handles cases where JSON contains embedded code blocks in string values
+  const jsonBlockMatch = output.match(/```json\s*\n([\s\S]*)/);
+  if (jsonBlockMatch) {
+    const content = jsonBlockMatch[1];
+    // Find the last ``` that closes our JSON block
+    // by finding the content that forms valid JSON
+    const lastBackticks = content.lastIndexOf('\n```');
+    if (lastBackticks !== -1) {
+      const candidate = content.substring(0, lastBackticks).trim();
+      // Verify it's valid JSON before returning
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        // Try other extraction methods
+      }
+    }
+  }
 
-  if (match && match[1]) {
-    return match[1].trim();
+  // Strategy 2: Generic ``` block (non-greedy for simple cases)
+  const genericMatch = output.match(/```\s*\n?([\s\S]*?)```/);
+  if (genericMatch && genericMatch[1]) {
+    const candidate = genericMatch[1].trim();
+    // Only return if it looks like JSON (starts with { or [)
+    if (candidate.startsWith('{') || candidate.startsWith('[')) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extracts JSON by finding balanced braces
+ * Scans for the first { and finds the matching closing }
+ * Properly handles braces inside string values
+ * @param output - Raw output that may contain JSON
+ * @returns Extracted JSON string or null if not found
+ */
+function extractJsonByBraceMatching(output: string): string | null {
+  // Find the first opening brace
+  const startIdx = output.indexOf('{');
+  if (startIdx === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = startIdx; i < output.length; i++) {
+    const char = output[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === '{') {
+      depth++;
+    } else if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        const candidate = output.substring(startIdx, i + 1);
+        // Verify it's valid JSON before returning
+        try {
+          JSON.parse(candidate);
+          return candidate;
+        } catch {
+          // Keep looking for a valid JSON object
+          continue;
+        }
+      }
+    }
   }
 
   return null;
@@ -264,6 +345,20 @@ export function parseClaudeOutput(output: string): ScanResult[] {
         }
       } catch {
         // Array pattern parsing failed
+      }
+    }
+  }
+
+  // Strategy 5: Robust JSON extraction by finding balanced braces
+  // This handles cases where JSON contains embedded code blocks
+  if (parsedResults.length === 0) {
+    const extracted = extractJsonByBraceMatching(output);
+    if (extracted) {
+      try {
+        const parsed = JSON.parse(extracted);
+        parsedResults = extractResultsArray(parsed);
+      } catch {
+        // Brace matching extraction failed
       }
     }
   }

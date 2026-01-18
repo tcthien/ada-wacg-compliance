@@ -85,6 +85,8 @@ export function useAiScanStatus(
   const currentIntervalRef = useRef<number>(initialInterval);
   const retryCountRef = useRef<number>(0);
   const isMountedRef = useRef(true);
+  const isPollingRef = useRef(true); // Use ref to avoid dependency loop
+  const fetchAiStatusRef = useRef<() => Promise<void>>(); // Ref for stable fetch function
 
   /**
    * Helper to determine if AI processing is in a terminal state
@@ -98,6 +100,7 @@ export function useAiScanStatus(
    * Stop polling manually
    */
   const stopPolling = useCallback(() => {
+    isPollingRef.current = false; // Update ref immediately
     setIsPolling(false);
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -129,7 +132,8 @@ export function useAiScanStatus(
    */
   const fetchAiStatus = useCallback(async (): Promise<void> => {
     // Don't fetch if component is unmounted or polling is stopped
-    if (!isMountedRef.current || !isPolling) return;
+    // Use ref to avoid dependency loop with isPolling state
+    if (!isMountedRef.current || !isPollingRef.current) return;
 
     try {
       const response = await api.aiCampaign.getAiStatus(scanId);
@@ -152,7 +156,7 @@ export function useAiScanStatus(
 
       // Schedule next poll with exponential backoff
       const nextInterval = getNextInterval();
-      timeoutRef.current = setTimeout(fetchAiStatus, nextInterval);
+      timeoutRef.current = setTimeout(() => fetchAiStatusRef.current?.(), nextInterval);
     } catch (err) {
       // Don't update state if component unmounted
       if (!isMountedRef.current) return;
@@ -167,7 +171,7 @@ export function useAiScanStatus(
         setError(`${errorMessage} (Retry ${retryCountRef.current}/${maxRetries})`);
 
         // Retry after delay
-        timeoutRef.current = setTimeout(fetchAiStatus, retryDelay);
+        timeoutRef.current = setTimeout(() => fetchAiStatusRef.current?.(), retryDelay);
       } else {
         // Max retries exceeded, stop polling
         setError(errorMessage);
@@ -175,7 +179,11 @@ export function useAiScanStatus(
         stopPolling();
       }
     }
-  }, [scanId, isPolling, isTerminalStatus, stopPolling, getNextInterval, maxRetries, retryDelay]);
+  // Note: isPolling removed from deps - using isPollingRef instead to avoid dependency loop
+  }, [scanId, isTerminalStatus, stopPolling, getNextInterval, maxRetries, retryDelay]);
+
+  // Keep ref updated for stable access in effect
+  fetchAiStatusRef.current = fetchAiStatus;
 
   /**
    * Manual refetch function
@@ -195,12 +203,14 @@ export function useAiScanStatus(
     }
 
     // Restart polling
+    isPollingRef.current = true;
     setIsPolling(true);
-    await fetchAiStatus();
-  }, [fetchAiStatus, resetInterval]);
+    await fetchAiStatusRef.current?.();
+  }, [resetInterval]);
 
   /**
    * Effect: Initialize and manage polling lifecycle
+   * Only depends on scanId to avoid re-initialization when callbacks change
    */
   useEffect(() => {
     // Mark as mounted
@@ -210,9 +220,10 @@ export function useAiScanStatus(
     setAiStatus(null);
     setIsLoading(true);
     setError(null);
+    isPollingRef.current = true;
     setIsPolling(true);
     retryCountRef.current = 0;
-    resetInterval();
+    currentIntervalRef.current = initialInterval;
 
     // Clear any existing timeout
     if (timeoutRef.current) {
@@ -220,18 +231,21 @@ export function useAiScanStatus(
       timeoutRef.current = null;
     }
 
-    // Start initial fetch
-    fetchAiStatus();
+    // Start initial fetch using ref for stable access
+    fetchAiStatusRef.current?.();
 
     // Cleanup on unmount
     return () => {
       isMountedRef.current = false;
+      isPollingRef.current = false;
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
     };
-  }, [scanId, fetchAiStatus, resetInterval]);
+    // Only re-run when scanId changes, not when callbacks change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanId]);
 
   return {
     aiStatus,

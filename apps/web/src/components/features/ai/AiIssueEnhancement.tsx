@@ -14,6 +14,7 @@
  */
 
 import { cn } from '@/lib/utils';
+import { formatAiContent } from '@/lib/text-formatter';
 import { Sparkles } from 'lucide-react';
 
 /**
@@ -78,56 +79,6 @@ function getPriorityInfo(priority: number): {
     bgColor: 'bg-green-50',
     borderColor: 'border-green-300',
   };
-}
-
-/**
- * Detects code blocks in text and wraps them with styling
- * Supports both inline code (`code`) and block code (```code```)
- */
-function formatCodeInText(text: string): React.ReactNode {
-  // Split by code blocks first (```)
-  const blockParts = text.split(/(```[\s\S]*?```)/g);
-
-  return blockParts.map((part, blockIndex) => {
-    if (part.startsWith('```') && part.endsWith('```')) {
-      // Code block
-      const code = part.slice(3, -3).trim();
-      return (
-        <pre
-          key={`block-${blockIndex}`}
-          className={cn(
-            'mt-2 mb-2 p-3 rounded-md overflow-x-auto',
-            'bg-gray-900 text-gray-100 text-sm',
-            'border border-gray-700'
-          )}
-        >
-          <code>{code}</code>
-        </pre>
-      );
-    }
-
-    // Split by inline code (`)
-    const inlineParts = part.split(/(`[^`]+`)/g);
-    return inlineParts.map((inlinePart, inlineIndex) => {
-      if (inlinePart.startsWith('`') && inlinePart.endsWith('`')) {
-        // Inline code
-        const code = inlinePart.slice(1, -1);
-        return (
-          <code
-            key={`inline-${blockIndex}-${inlineIndex}`}
-            className={cn(
-              'px-1.5 py-0.5 rounded text-sm',
-              'bg-gray-900 text-gray-100',
-              'border border-gray-700'
-            )}
-          >
-            {code}
-          </code>
-        );
-      }
-      return <span key={`text-${blockIndex}-${inlineIndex}`}>{inlinePart}</span>;
-    });
-  });
 }
 
 /**
@@ -222,7 +173,7 @@ export function AiIssueEnhancement({
           What This Means
         </h4>
         <div className="text-sm text-gray-700 leading-relaxed">
-          {formatCodeInText(data.explanation)}
+          {formatAiContent(data.explanation)}
         </div>
       </div>
 
@@ -232,7 +183,7 @@ export function AiIssueEnhancement({
           How to Fix It
         </h4>
         <div className="text-sm text-gray-700 leading-relaxed">
-          {formatCodeInText(data.fixSuggestion)}
+          {formatAiContent(data.fixSuggestion)}
         </div>
       </div>
 

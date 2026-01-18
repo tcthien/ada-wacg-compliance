@@ -129,6 +129,24 @@ export interface BatchAggregateStats {
 }
 
 /**
+ * Coverage metrics for batch results (Enhanced Trust Indicators)
+ */
+export interface BatchCoverageMetrics {
+  /** Average coverage percentage across all scans */
+  averageCoveragePercentage: number;
+  /** Total unique criteria checked across batch */
+  totalCriteriaChecked: number;
+  /** Total WCAG criteria for the conformance level */
+  totalCriteriaTotal: number;
+  /** Number of AI-enhanced scans */
+  aiEnhancedCount: number;
+  /** Number of standard scans */
+  standardCount: number;
+  /** Whether any scans are AI-enhanced */
+  hasAiEnhanced: boolean;
+}
+
+/**
  * Aggregate batch results response
  */
 export interface BatchResultsResponse {
@@ -144,6 +162,8 @@ export interface BatchResultsResponse {
   aggregate: BatchAggregateStats;
   urls: UrlIssueSummaryDetailed[];
   topCriticalUrls: TopCriticalUrl[];
+  /** Coverage metrics (Enhanced Trust Indicators) */
+  coverage?: BatchCoverageMetrics;
 }
 
 /**

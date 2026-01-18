@@ -9,6 +9,7 @@ import { BatchProgress } from '@/components/features/batch/BatchProgress';
 import { BatchSummary } from '@/components/features/batch/BatchSummary';
 import { BatchUrlList } from '@/components/features/batch/BatchUrlList';
 import { BatchExport } from '@/components/features/batch/BatchExport';
+import { BatchCoverageCard } from '@/components/features/batch/BatchCoverageCard';
 import { ReportArtifacts } from '@/components/features/export/ReportArtifacts';
 import { ShareButton } from '@/components/ui/share-button';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
@@ -200,6 +201,22 @@ export default function BatchResultPage() {
             {/* Partial Results - only if some scans completed */}
             {batch.completedCount > 0 && (
               <>
+                {/* Coverage Metrics Card */}
+                {results.coverage && (
+                  <BatchCoverageCard
+                    averageCoveragePercentage={results.coverage.averageCoveragePercentage}
+                    totalCriteriaChecked={results.coverage.totalCriteriaChecked}
+                    totalCriteriaTotal={results.coverage.totalCriteriaTotal}
+                    aiEnhancedCount={results.coverage.aiEnhancedCount}
+                    standardCount={results.coverage.standardCount}
+                    hasAiEnhanced={results.coverage.hasAiEnhanced}
+                    passedChecks={results.aggregate.passedChecks}
+                    urlsScanned={results.aggregate.urlsScanned}
+                    wcagLevel={results.wcagLevel}
+                    className="mb-6"
+                  />
+                )}
+
                 {/* Summary Card - Partial Results */}
                 <div className="bg-white rounded-lg border shadow-sm p-6 mb-6">
                   <h2 className="text-xl font-semibold mb-4">
@@ -467,6 +484,22 @@ export default function BatchResultPage() {
             {/* Partial Results - only if some scans completed */}
             {batch.completedCount > 0 && (
               <>
+                {/* Coverage Metrics Card */}
+                {results.coverage && (
+                  <BatchCoverageCard
+                    averageCoveragePercentage={results.coverage.averageCoveragePercentage}
+                    totalCriteriaChecked={results.coverage.totalCriteriaChecked}
+                    totalCriteriaTotal={results.coverage.totalCriteriaTotal}
+                    aiEnhancedCount={results.coverage.aiEnhancedCount}
+                    standardCount={results.coverage.standardCount}
+                    hasAiEnhanced={results.coverage.hasAiEnhanced}
+                    passedChecks={results.aggregate.passedChecks}
+                    urlsScanned={results.aggregate.urlsScanned}
+                    wcagLevel={results.wcagLevel}
+                    className="mb-6"
+                  />
+                )}
+
                 {/* Summary Card - Partial Results */}
                 <div className="bg-white rounded-lg border shadow-sm p-6 mb-6">
                   <h2 className="text-xl font-semibold mb-4">
@@ -733,6 +766,22 @@ export default function BatchResultPage() {
                 </div>
               )}
             </div>
+
+            {/* Coverage Metrics Card (Enhanced Trust Indicators) */}
+            {results.coverage && (
+              <BatchCoverageCard
+                averageCoveragePercentage={results.coverage.averageCoveragePercentage}
+                totalCriteriaChecked={results.coverage.totalCriteriaChecked}
+                totalCriteriaTotal={results.coverage.totalCriteriaTotal}
+                aiEnhancedCount={results.coverage.aiEnhancedCount}
+                standardCount={results.coverage.standardCount}
+                hasAiEnhanced={results.coverage.hasAiEnhanced}
+                passedChecks={results.aggregate.passedChecks}
+                urlsScanned={results.aggregate.urlsScanned}
+                wcagLevel={results.wcagLevel}
+                className="mb-6"
+              />
+            )}
 
             {/* Aggregate Results Summary */}
             <div className="bg-white rounded-lg border shadow-sm p-6 mb-6">

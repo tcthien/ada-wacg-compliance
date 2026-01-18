@@ -13,7 +13,7 @@ import { IssueList, type Issue } from '@/components/features/results/IssueList';
 import { ExportButton } from '@/components/features/export/ExportButton';
 import { ReportArtifacts } from '@/components/features/export/ReportArtifacts';
 import { ShareButton } from '@/components/ui/share-button';
-import { CoverageDisclaimer } from '@/components/features/compliance/CoverageDisclaimer';
+import { ScanCoverageCard } from '@/components/features/compliance';
 import { AiStatusBadge } from '@/components/features/ai/AiStatusBadge';
 import { AiSummarySection } from '@/components/features/ai/AiSummarySection';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
@@ -69,6 +69,7 @@ export default function ScanResultPage() {
     result,
     loading: resultLoading,
     error: resultError,
+    refetch: refetchResult,
   } = useScanResult(scanId, {
     enabled: scan?.status === 'COMPLETED',
   });
@@ -78,6 +79,30 @@ export default function ScanResultPage() {
     initialInterval: 60000, // 60 seconds
     maxInterval: 120000, // 2 minutes
   });
+
+  // Refetch scan result when AI status changes to COMPLETED
+  // This ensures coverage data is updated with AI-enhanced values
+  const prevAiStatusRef = useRef<string | null>(null);
+  const hasRefetchedForAiRef = useRef(false);
+  useEffect(() => {
+    const currentStatus = aiStatus?.status ?? null;
+    const prevStatus = prevAiStatusRef.current;
+
+    // Only refetch ONCE when status changes TO COMPLETED (not on initial load)
+    if (
+      !hasRefetchedForAiRef.current &&
+      prevStatus !== null &&
+      prevStatus !== 'COMPLETED' &&
+      currentStatus === 'COMPLETED'
+    ) {
+      hasRefetchedForAiRef.current = true;
+      refetchResult();
+    }
+
+    prevAiStatusRef.current = currentStatus;
+    // Note: refetchResult is intentionally not in deps - we use ref to ensure single refetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiStatus?.status]);
 
   // Fetch report status to display available report artifacts (PDF/JSON)
   const {
@@ -395,11 +420,20 @@ export default function ScanResultPage() {
                   />
                 </div>
               )}
+            </div>
 
-              {/* Coverage Disclaimer */}
-              <div className="mt-4">
-                <CoverageDisclaimer />
-              </div>
+            {/* Scan Coverage Card - Trust Indicators */}
+            <div className="mb-8">
+              <ScanCoverageCard
+                coveragePercentage={result.coverage?.coveragePercentage ?? 57}
+                criteriaChecked={result.coverage?.criteriaChecked ?? 0}
+                criteriaTotal={result.coverage?.criteriaTotal ?? 50}
+                passedChecks={result.summary.passed}
+                isAiEnhanced={scan.aiEnabled ?? false}
+                wcagLevel={result.wcagLevel}
+                aiStatus={aiStatus?.status}
+                breakdown={result.coverage?.breakdown}
+              />
             </div>
 
           {/* AI Summary Section - Show when AI is completed */}

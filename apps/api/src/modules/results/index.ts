@@ -13,4 +13,13 @@ export {
   type IssuesByImpact,
   type ResultMetadata,
   type FormattedResult,
+  type CoverageMetrics,
 } from './result.service.js';
+
+export {
+  coverageService,
+  CoverageService,
+  type CoverageBreakdown,
+  type ScanResultData,
+  type AiStatus,
+} from './coverage.service.js';

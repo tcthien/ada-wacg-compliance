@@ -73,52 +73,71 @@ N/A - Backend issue
 
 ## Initial Analysis
 
-### Suspected Root Cause
-**Function signature mismatch between API and Worker email queue functions.**
+### Suspected Root Cause (UPDATED)
+**GDPR email nullification removes email address before AI import can queue notification.**
 
-In `apps/api/src/modules/ai-campaign/ai-queue.service.ts` (lines 718-731), the import function calls:
+The actual root cause is NOT a function signature mismatch (that was fixed in a previous commit). The real issue is:
+
+1. When a scan completes normally, the `scan_complete` email is sent
+2. After sending, the email is **nullified** for GDPR compliance (line 370-374 in `send-email.processor.ts`)
+3. When AI results are imported later, the import function tries to fetch `scan.email`
+4. Since `scan.email` is now `null`, the `if (scan?.email)` check fails
+5. **No `ai_scan_complete` email is queued** - silently skipped
+
 ```typescript
-await addEmailJob(
-  scan.email,           // to
-  'ai-scan-complete',   // template name (NOT 'ai_scan_complete')
-  {                     // data object
-    scanId: row.scan_id,
-    url: scan.url,
-    aiSummary: row.ai_summary,
-    tokensUsed: row.tokens_used,
-    aiModel: row.ai_model,
-  },
-  {
-    subject: 'Your AI-Enhanced Accessibility Scan is Ready',
-  }
-);
+// In send-email.processor.ts (processSendEmail function):
+// After sending scan_complete email:
+await prisma.scan.update({
+  where: { id: scanId },
+  data: { email: null },  // <-- Email is nullified here
+});
 ```
 
-This uses the **API's `addEmailJob`** function from `queue.service.ts` which expects:
-- `(to: string, template: string, data: object, options?: object)`
-
-However, the **Worker's email processor** (`send-email.processor.ts`) expects `SendEmailJobData`:
 ```typescript
-interface SendEmailJobData {
-  scanId?: string;
-  email: string;
-  type: 'scan_complete' | 'scan_failed' | 'batch_complete' | 'ai_scan_complete';
+// In ai-queue.service.ts (importAiResults function):
+const scan = await prisma.scan.findUnique({
+  where: { id: row.scan_id },
+  select: { email: true, url: true },
+});
+
+if (scan?.email) {  // <-- This is null, so email is never queued
+  // Queue ai_scan_complete email...
 }
 ```
 
-**Issues identified:**
-1. The API queues jobs with `TemplateEmailJobData` format (template-based)
-2. The Worker expects `SendEmailJobData` format (type-based)
-3. Template name `'ai-scan-complete'` doesn't match enum value `'ai_scan_complete'`
-4. The Worker's `processAiScanCompleteEmail` function won't be called because job data structure doesn't match
-
 ### Affected Components
-- `apps/api/src/modules/ai-campaign/ai-queue.service.ts` - Import function queuing email incorrectly
-- `apps/api/src/shared/queue/queue.service.ts` - API's addEmailJob creates TemplateEmailJobData
-- `apps/worker/src/jobs/email-queue.ts` - Worker's addEmailJob creates SendEmailJobData
-- `apps/worker/src/processors/send-email.processor.ts` - Expects SendEmailJobData with `type` field
+- `apps/worker/src/processors/send-email.processor.ts` - Nullifies email after `scan_complete` without checking if AI is enabled
+
+---
+
+## Fix Applied
+
+**Modified**: `apps/worker/src/processors/send-email.processor.ts`
+
+The fix skips email nullification for AI-enabled scans, preserving the email address until the `ai_scan_complete` email is sent:
+
+```typescript
+// 5. Nullify email in database (GDPR compliance)
+// Skip nullification if AI is enabled - email will be nullified after ai_scan_complete email
+let emailNullified = false;
+if (scan.aiEnabled) {
+  console.log(`⏳ Skipping email nullification - AI processing pending (will nullify after AI email)`);
+} else {
+  await prisma.scan.update({
+    where: { id: scanId },
+    data: { email: null },
+  });
+  emailNullified = true;
+  console.log(`🔒 Email address nullified for GDPR compliance`);
+}
+```
+
+### Impact
+- **New AI-enabled scans**: Will correctly receive both `scan_complete` AND `ai_scan_complete` emails
+- **Existing scans with nullified emails**: Cannot be fixed retroactively (email is already null)
 
 ---
 
 **Report Created**: 2026-01-10
-**Status**: Ready for Analysis
+**Fix Applied**: 2026-01-17
+**Status**: Fixed - Pending Verification

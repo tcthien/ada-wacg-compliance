@@ -9,9 +9,10 @@ import {
   WCAG_CRITERIA,
   AXE_RULE_TO_WCAG,
   getCriteriaUpToLevel,
+  UNTESTABLE_CRITERIA,
   type WCAGLevel,
 } from '@adashield/core/constants';
-import type { Issue, WcagLevel } from '@adashield/core/types';
+import type { Issue, WcagLevel, CriteriaVerification, CriteriaStatus, CriteriaVerificationSummary, EnhancedCoverageMetrics, BuildCriteriaVerificationsInput } from '@adashield/core/types';
 
 /**
  * AI scan status values
@@ -200,6 +201,296 @@ export class CoverageService {
     // This is a rough estimate since we don't know which specific rules passed
     const estimatedRatio = Math.min(passedChecks / totalAxeRules, 1);
     return Math.round(estimatedRatio * totalMappedCriteria);
+  }
+
+  /**
+   * Build criteria verifications from scan data, issues, and AI results
+   *
+   * This creates a verification record for each WCAG criterion:
+   * 1. Maps axe-core passed rules to criteria (status: PASS)
+   * 2. Maps issues to criteria (status: FAIL)
+   * 3. Merges AI verifications (AI takes precedence for verified criteria)
+   * 4. Marks remaining as NOT_TESTED
+   *
+   * @param input - Input data for building verifications
+   * @returns Array of criteria verifications
+   */
+  buildCriteriaVerifications(input: BuildCriteriaVerificationsInput): CriteriaVerification[] {
+    const { issues, wcagLevel, passedChecks = [], aiVerifications = [], aiModel } = input;
+    const normalizedLevel = wcagLevel.toUpperCase() as WCAGLevel;
+
+    // Get all criteria for the WCAG level
+    const allCriteria = getCriteriaUpToLevel(normalizedLevel);
+    const criteriaMap = new Map<string, CriteriaVerification>();
+
+    // Initialize all criteria as NOT_TESTED
+    for (const criterion of allCriteria) {
+      criteriaMap.set(criterion.id, {
+        criterionId: criterion.id,
+        status: 'NOT_TESTED',
+        scanner: 'N/A',
+      });
+    }
+
+    // Map axe-core passed rules to criteria (status: PASS)
+    const passedCriteria = this.mapPassedChecksToCriteria(passedChecks);
+    for (const criterionId of passedCriteria) {
+      if (criteriaMap.has(criterionId)) {
+        criteriaMap.set(criterionId, {
+          criterionId,
+          status: 'PASS',
+          scanner: 'axe-core',
+        });
+      }
+    }
+
+    // Map issues to criteria (status: FAIL)
+    const issueByCriteria = this.groupIssuesByCriteria(issues);
+    for (const [criterionId, issueList] of issueByCriteria) {
+      if (criteriaMap.has(criterionId)) {
+        criteriaMap.set(criterionId, {
+          criterionId,
+          status: 'FAIL',
+          scanner: 'axe-core',
+          issueIds: issueList.map(i => i.id),
+        });
+      }
+    }
+
+    // Merge AI verifications (AI takes precedence)
+    for (const aiVerification of aiVerifications) {
+      if (criteriaMap.has(aiVerification.criterionId)) {
+        const existing = criteriaMap.get(aiVerification.criterionId)!;
+        const isAiStatus = aiVerification.status === 'AI_VERIFIED_PASS' || aiVerification.status === 'AI_VERIFIED_FAIL';
+
+        if (isAiStatus) {
+          // AI verification takes precedence, but preserve issue links if it's a FAIL
+          const scanner = existing.scanner === 'axe-core' && isAiStatus
+            ? 'axe-core + AI'
+            : aiModel || 'AI';
+
+          criteriaMap.set(aiVerification.criterionId, {
+            criterionId: aiVerification.criterionId,
+            status: aiVerification.status,
+            scanner,
+            issueIds: existing.issueIds || aiVerification.issueIds,
+            confidence: aiVerification.confidence,
+            reasoning: aiVerification.reasoning,
+          });
+        }
+      }
+    }
+
+    return Array.from(criteriaMap.values());
+  }
+
+  /**
+   * Map passed axe-core check rule IDs to WCAG criteria IDs
+   */
+  private mapPassedChecksToCriteria(passedChecks: string[]): Set<string> {
+    const criteria = new Set<string>();
+
+    for (const ruleId of passedChecks) {
+      const wcagIds = AXE_RULE_TO_WCAG[ruleId];
+      if (wcagIds) {
+        for (const id of wcagIds) {
+          criteria.add(id);
+        }
+      }
+    }
+
+    return criteria;
+  }
+
+  /**
+   * Group issues by their WCAG criteria
+   */
+  private groupIssuesByCriteria(issues: Array<{ id: string; wcagCriteria: string[] }>): Map<string, Array<{ id: string; wcagCriteria: string[] }>> {
+    const byCriteria = new Map<string, Array<{ id: string; wcagCriteria: string[] }>>();
+
+    for (const issue of issues) {
+      if (issue.wcagCriteria && Array.isArray(issue.wcagCriteria)) {
+        for (const criterionId of issue.wcagCriteria) {
+          if (criterionId && WCAG_CRITERIA[criterionId]) {
+            if (!byCriteria.has(criterionId)) {
+              byCriteria.set(criterionId, []);
+            }
+            byCriteria.get(criterionId)!.push(issue);
+          }
+        }
+      }
+    }
+
+    return byCriteria;
+  }
+
+  /**
+   * Calculate coverage metrics from criteria verifications
+   *
+   * This computes ACTUAL coverage percentage based on verified criteria,
+   * not theoretical percentages (e.g., "57%" or "75-85%").
+   *
+   * Formula: coveragePercentage = (criteriaChecked / criteriaTotal) * 100
+   * Where criteriaChecked = PASS + FAIL + AI_VERIFIED_PASS + AI_VERIFIED_FAIL
+   *
+   * @param verifications - Array of criteria verifications
+   * @param wcagLevel - Target WCAG conformance level
+   * @returns Enhanced coverage metrics with actual computed values
+   */
+  calculateCoverageFromVerifications(
+    verifications: CriteriaVerification[],
+    wcagLevel: WcagLevel
+  ): EnhancedCoverageMetrics {
+    const normalizedLevel = wcagLevel.toUpperCase() as WCAGLevel;
+    const criteriaTotal = getCriteriaUpToLevel(normalizedLevel).length;
+
+    // Count by status
+    let passed = 0;
+    let failed = 0;
+    let aiPassed = 0;
+    let aiFailed = 0;
+    let notTested = 0;
+
+    for (const v of verifications) {
+      switch (v.status) {
+        case 'PASS':
+          passed++;
+          break;
+        case 'FAIL':
+          failed++;
+          break;
+        case 'AI_VERIFIED_PASS':
+          aiPassed++;
+          break;
+        case 'AI_VERIFIED_FAIL':
+          aiFailed++;
+          break;
+        case 'NOT_TESTED':
+          notTested++;
+          break;
+      }
+    }
+
+    const criteriaChecked = passed + failed + aiPassed + aiFailed;
+    const criteriaWithIssues = failed + aiFailed;
+    const criteriaPassed = passed + aiPassed;
+    const criteriaAiVerified = aiPassed + aiFailed;
+    const isAiEnhanced = criteriaAiVerified > 0;
+
+    // ACTUAL percentage - not theoretical
+    const coveragePercentage = criteriaTotal > 0
+      ? Math.round((criteriaChecked / criteriaTotal) * 100)
+      : 0;
+
+    const summary: CriteriaVerificationSummary = {
+      criteriaChecked,
+      criteriaTotal,
+      criteriaWithIssues,
+      criteriaPassed,
+      criteriaAiVerified,
+      criteriaNotTested: notTested,
+    };
+
+    return {
+      coveragePercentage,
+      criteriaChecked,
+      criteriaTotal,
+      isAiEnhanced,
+      criteriaVerifications: verifications,
+      summary,
+    };
+  }
+
+  /**
+   * Compute criteria verifications from legacy scan data
+   *
+   * For old scans without stored CriteriaVerification records, this method
+   * computes verifications from issues and passed checks.
+   *
+   * This is a backward compatibility method that produces the same output
+   * as buildCriteriaVerifications but without AI data.
+   *
+   * @param scanResult - Legacy scan result data
+   * @param issues - Issues from the scan
+   * @param wcagLevel - Target WCAG conformance level
+   * @param passedRuleIds - Array of axe rule IDs that passed (optional)
+   * @returns Array of computed criteria verifications
+   */
+  computeVerificationsFromLegacyData(
+    scanResult: ScanResultData,
+    issues: Array<{ id: string; wcagCriteria: string[] }>,
+    wcagLevel: WcagLevel,
+    passedRuleIds: string[] = []
+  ): CriteriaVerification[] {
+    const normalizedLevel = wcagLevel.toUpperCase() as WCAGLevel;
+    const allCriteria = getCriteriaUpToLevel(normalizedLevel);
+    const criteriaMap = new Map<string, CriteriaVerification>();
+
+    // Initialize all criteria as NOT_TESTED
+    for (const criterion of allCriteria) {
+      criteriaMap.set(criterion.id, {
+        criterionId: criterion.id,
+        status: 'NOT_TESTED',
+        scanner: 'N/A',
+      });
+    }
+
+    // If we have specific passed rule IDs, map them
+    if (passedRuleIds.length > 0) {
+      const passedCriteria = this.mapPassedChecksToCriteria(passedRuleIds);
+      for (const criterionId of passedCriteria) {
+        if (criteriaMap.has(criterionId)) {
+          criteriaMap.set(criterionId, {
+            criterionId,
+            status: 'PASS',
+            scanner: 'axe-core',
+          });
+        }
+      }
+    } else if (scanResult.passedChecks > 0) {
+      // Fallback: estimate passed criteria from count
+      // This uses heuristic based on passed check count
+      const estimatedPassedRatio = Math.min(scanResult.passedChecks / Object.keys(AXE_RULE_TO_WCAG).length, 1);
+      const allAxeCriteria = new Set<string>();
+
+      for (const wcagIds of Object.values(AXE_RULE_TO_WCAG)) {
+        for (const id of wcagIds) {
+          if (criteriaMap.has(id)) {
+            allAxeCriteria.add(id);
+          }
+        }
+      }
+
+      // Mark some criteria as PASS based on ratio (deterministic using sort)
+      const sortedCriteria = Array.from(allAxeCriteria).sort();
+      const numToPass = Math.round(sortedCriteria.length * estimatedPassedRatio);
+
+      for (let i = 0; i < numToPass; i++) {
+        const criterionId = sortedCriteria[i];
+        if (criterionId) {
+          criteriaMap.set(criterionId, {
+            criterionId,
+            status: 'PASS',
+            scanner: 'axe-core',
+          });
+        }
+      }
+    }
+
+    // Map issues to criteria (status: FAIL)
+    const issueByCriteria = this.groupIssuesByCriteria(issues);
+    for (const [criterionId, issueList] of issueByCriteria) {
+      if (criteriaMap.has(criterionId)) {
+        criteriaMap.set(criterionId, {
+          criterionId,
+          status: 'FAIL',
+          scanner: 'axe-core',
+          issueIds: issueList.map(i => i.id),
+        });
+      }
+    }
+
+    return Array.from(criteriaMap.values());
   }
 }
 

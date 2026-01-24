@@ -198,6 +198,52 @@ scan-002,https://test.com,A,
 
 > **Note**: When you see "Processing batch X, mini-batch Y" followed by silence, Claude Code is actively working. Each mini-batch can take 1-3 minutes depending on page complexity.
 
+## WCAG Criteria Verification
+
+The AI Scan CLI includes a comprehensive WCAG criteria verification feature that systematically evaluates all 50 WCAG 2.1 AA success criteria for each scanned page. This provides detailed per-criterion compliance status beyond individual issue detection.
+
+### How It Works
+
+1. **Batch Processing**: The 50 WCAG AA criteria are divided into 5 batches of 10 criteria each
+2. **AI Evaluation**: For each batch, Claude analyzes the page content against each criterion
+3. **Status Assignment**: Each criterion receives a status:
+   - `PASS` - The page meets the criterion requirements
+   - `FAIL` - The page has issues that violate the criterion
+   - `NOT_TESTED` - The criterion could not be evaluated (e.g., no relevant content)
+4. **Result Aggregation**: All batch results are combined into a complete criteria verification report
+
+### Verification Process Flow
+
+```
+Page Content → Batch 1 (10 criteria) → AI Analysis → Results
+            → Batch 2 (10 criteria) → AI Analysis → Results
+            → Batch 3 (10 criteria) → AI Analysis → Results
+            → Batch 4 (10 criteria) → AI Analysis → Results
+            → Batch 5 (10 criteria) → AI Analysis → Results
+                                                      ↓
+                              Combined Criteria Verification Report
+```
+
+### Output Format
+
+The criteria verification results are included in the output CSV under the `criteria_verification_json` column:
+
+```json
+{
+  "1.1.1": { "status": "FAIL", "notes": "Missing alt text on 3 images" },
+  "1.2.1": { "status": "NOT_TESTED", "notes": "No audio-only content found" },
+  "1.3.1": { "status": "PASS", "notes": "Proper semantic structure used" }
+}
+```
+
+### Caching and Checkpoints
+
+The criteria verification system includes intelligent caching and checkpoint support:
+
+- **Cache**: Stores verification results for identical page content (based on content hash)
+- **Checkpoints**: Saves progress after each batch, enabling resume on interruption
+- **Default TTL**: Cache entries expire after 7 days
+
 ## CLI Options Reference
 
 ### Core Options
@@ -226,6 +272,25 @@ scan-002,https://test.com,A,
 | `--resume` `-r` | Resume from checkpoint | `false` |
 | `--clear-checkpoint` | Clear checkpoint and start fresh | `false` |
 
+### Criteria Verification Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--skip-criteria-verification` | Skip criteria verification (issue enhancement only) | `false` |
+| `--criteria-batch-size <n>` | Number of criteria to process per batch (1-15) | `10` |
+| `--fresh` | Ignore existing checkpoints and start fresh | `false` |
+| `--checkpoint-dir <path>` | Custom directory for checkpoint files | `./.ai-scan-checkpoints` |
+
+### Cache Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--no-cache` | Bypass cache for all operations (useful for testing) | `false` |
+| `--clear-cache` | Clear all cached entries before processing | `false` |
+| `--cache-stats` | Display cache statistics and exit | `false` |
+| `--cache-dir <path>` | Custom directory for cache files | `./.ai-scan-cache` |
+| `--cache-ttl <days>` | Cache time-to-live in days | `7` |
+
 ### Feature Flags
 
 | Option | Alias | Description | Default |
@@ -242,7 +307,195 @@ scan-002,https://test.com,A,
 - `--input` and `--input-dir` are mutually exclusive
 - `--verbose` and `--quiet` are mutually exclusive
 - `--resume` and `--clear-checkpoint` are mutually exclusive
+- `--resume` and `--fresh` are mutually exclusive
 - Mini-batch size must be between 1-10 (Claude context window limitation)
+- Criteria batch size must be between 1-15 (optimal: 8-10)
+
+## Environment Variables
+
+The CLI supports configuration via environment variables. These take precedence over default values but are overridden by command-line options.
+
+### Criteria Verification Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AI_CRITERIA_BATCH_SIZE` | Number of criteria per batch | `10` |
+| `AI_CRITERIA_BATCH_DELAY` | Delay between batches in milliseconds | `2000` |
+| `AI_CRITERIA_VERIFICATION_ENABLED` | Enable/disable criteria verification | `true` |
+| `AI_CRITERIA_BATCH_TIMEOUT` | Timeout per batch in milliseconds | `120000` |
+
+### Example: Setting Environment Variables
+
+```bash
+# Disable criteria verification
+export AI_CRITERIA_VERIFICATION_ENABLED=false
+
+# Increase batch size for faster processing
+export AI_CRITERIA_BATCH_SIZE=12
+
+# Increase delay between batches to avoid rate limiting
+export AI_CRITERIA_BATCH_DELAY=5000
+
+# Increase timeout for complex pages
+export AI_CRITERIA_BATCH_TIMEOUT=180000
+
+# Then run the CLI
+ai-scan-cli --input scans.csv
+```
+
+### Using .env File
+
+You can also create a `.env` file in the `tools/ai-scan-cli` directory:
+
+```env
+AI_CRITERIA_VERIFICATION_ENABLED=true
+AI_CRITERIA_BATCH_SIZE=10
+AI_CRITERIA_BATCH_DELAY=2000
+AI_CRITERIA_BATCH_TIMEOUT=120000
+```
+
+## Criteria Verification Use Cases
+
+This section provides common usage patterns for the criteria verification feature.
+
+### Basic Usage with Criteria Verification
+
+Run a full scan with criteria verification enabled (default behavior):
+
+```bash
+# Full scan with criteria verification
+ai-scan-cli --input pending-scans.csv --output ./results/
+
+# With verbose output to monitor progress
+ai-scan-cli --input pending-scans.csv --output ./results/ --verbose
+```
+
+### Skip Criteria Verification (Issue Enhancement Only)
+
+If you only need issue detection without per-criterion verification:
+
+```bash
+# Skip criteria verification for faster processing
+ai-scan-cli --input pending-scans.csv --skip-criteria-verification
+```
+
+### Resume Interrupted Processing
+
+If processing is interrupted (network issue, system restart, etc.):
+
+```bash
+# Resume from last checkpoint
+ai-scan-cli --input pending-scans.csv --resume
+
+# Resume with verbose output
+ai-scan-cli --input pending-scans.csv --resume --verbose
+```
+
+### Start Fresh (Ignore Checkpoints)
+
+To restart processing from the beginning, ignoring any saved checkpoints:
+
+```bash
+# Ignore existing checkpoints and start fresh
+ai-scan-cli --input pending-scans.csv --fresh
+
+# Clear checkpoint explicitly
+ai-scan-cli --input pending-scans.csv --clear-checkpoint
+```
+
+### Re-scan with Cache Bypass
+
+When you need fresh verification results (e.g., page content changed):
+
+```bash
+# Bypass cache for all operations
+ai-scan-cli --input pending-scans.csv --no-cache
+
+# Clear cache entirely before processing
+ai-scan-cli --input pending-scans.csv --clear-cache
+```
+
+### View Cache Statistics
+
+Check current cache status and hit rates:
+
+```bash
+# Display cache statistics
+ai-scan-cli --cache-stats
+
+# Example output:
+# === Cache Statistics ===
+# Total entries: 150
+# Cache hits: 120
+# Cache misses: 30
+# Hit rate: 80%
+# Total size: 15.2 MB
+# Oldest entry: 2026-01-10T10:30:00Z
+# Newest entry: 2026-01-18T14:22:00Z
+```
+
+### Custom Cache and Checkpoint Directories
+
+Specify custom directories for cache and checkpoint files:
+
+```bash
+# Custom directories
+ai-scan-cli --input pending-scans.csv \
+  --cache-dir /var/cache/ai-scan/ \
+  --checkpoint-dir /var/checkpoints/ai-scan/
+
+# With custom cache TTL (14 days)
+ai-scan-cli --input pending-scans.csv \
+  --cache-dir /var/cache/ai-scan/ \
+  --cache-ttl 14
+```
+
+### Batch Processing Multiple Pages with Custom Batch Size
+
+Adjust criteria batch size for different scenarios:
+
+```bash
+# Smaller batches (more API calls, but more resilient)
+ai-scan-cli --input pending-scans.csv --criteria-batch-size 5
+
+# Larger batches (fewer API calls, faster)
+ai-scan-cli --input pending-scans.csv --criteria-batch-size 12
+```
+
+### Production Cron Job with Criteria Verification
+
+Complete example for automated production processing:
+
+```bash
+# Run every hour with criteria verification, logging, and auto-resume
+0 * * * * cd /opt/ai-scan-cli && \
+  AI_CRITERIA_BATCH_DELAY=3000 \
+  node dist/index.js \
+    --input-dir /var/scans/pending/ \
+    --output /var/scans/results/ \
+    --resume \
+    --cache-dir /var/cache/ai-scan/ \
+    --checkpoint-dir /var/checkpoints/ai-scan/ \
+    --log /var/logs/ai-scan/ \
+    --quiet \
+    --json-summary \
+  >> /var/logs/ai-scan/cron.log 2>&1
+```
+
+### Testing and Development
+
+Useful patterns for development and testing:
+
+```bash
+# Test single page with no cache
+ai-scan-cli --input test-scan.csv --no-cache --verbose
+
+# Test with smaller criteria batches
+ai-scan-cli --input test-scan.csv --criteria-batch-size 3 --verbose
+
+# Dry run to preview processing plan
+ai-scan-cli --input test-scan.csv --dry-run
+```
 
 ## Configuration
 
@@ -461,6 +714,7 @@ The main output file contains scan results in a format compatible with the ADASh
 | `moderate_count` | number | Moderate severity issues |
 | `minor_count` | number | Minor severity issues |
 | `issues_with_ai_json` | string | JSON array of detailed issues |
+| `criteria_verification_json` | string | JSON object with per-criterion verification results |
 | `status` | string | "COMPLETED" or "FAILED" |
 | `error_message` | string | Error details (if failed) |
 
@@ -522,6 +776,72 @@ When using `--resume`, a checkpoint file tracks processing progress.
 - Automatically saved after each mini-batch completes
 - Deleted automatically when full processing completes
 - Use `--clear-checkpoint` to manually reset
+
+### Criteria Verification Checkpoint File
+
+When using criteria verification with `--resume`, a separate checkpoint tracks criteria verification progress for each scan.
+
+**Location**: `.ai-scan-checkpoints/{scan_id}-criteria.json` (or custom `--checkpoint-dir`)
+
+**Format**:
+```json
+{
+  "scanId": "scan-123",
+  "url": "https://example.com",
+  "contentHash": "abc123def456...",
+  "totalCriteria": 50,
+  "completedBatches": [0, 1, 2],
+  "results": {
+    "1.1.1": { "status": "FAIL", "notes": "Missing alt text" },
+    "1.2.1": { "status": "NOT_TESTED", "notes": "No audio content" }
+  },
+  "startedAt": "2026-01-18T10:30:00.000Z",
+  "updatedAt": "2026-01-18T10:35:22.000Z"
+}
+```
+
+**Fields**:
+- `scanId`: The scan ID being processed
+- `url`: URL of the page being verified
+- `contentHash`: Hash of page content (used for cache invalidation)
+- `totalCriteria`: Total number of criteria to verify (50 for AA level)
+- `completedBatches`: Array of batch indices that have been completed
+- `results`: Partial results from completed batches
+- `startedAt`: When criteria verification started
+- `updatedAt`: Last checkpoint update time
+
+**Behavior**:
+- Saved after each criteria batch completes
+- Automatically deleted when all criteria batches complete
+- Use `--fresh` to ignore and restart criteria verification
+
+### Cache File Structure
+
+The criteria verification cache stores results for pages with identical content.
+
+**Location**: `.ai-scan-cache/` (or custom `--cache-dir`)
+
+**File Naming**: `{contentHash}.json`
+
+**Format**:
+```json
+{
+  "contentHash": "abc123def456...",
+  "url": "https://example.com",
+  "results": {
+    "1.1.1": { "status": "PASS", "notes": "All images have alt text" },
+    "1.2.1": { "status": "NOT_TESTED", "notes": "No audio content found" }
+  },
+  "createdAt": "2026-01-15T08:00:00.000Z",
+  "expiresAt": "2026-01-22T08:00:00.000Z"
+}
+```
+
+**Behavior**:
+- Cache entries expire based on `--cache-ttl` (default: 7 days)
+- Same content on different URLs shares cache entries
+- Use `--no-cache` to bypass cache
+- Use `--clear-cache` to remove all entries
 
 ## Troubleshooting
 
@@ -635,6 +955,79 @@ When using `--resume`, a checkpoint file tracks processing progress.
 2. Check checkpoint is valid JSON: `cat .ai-scan-checkpoint.json`
 3. Clear and restart: `ai-scan-cli --input scans.csv --clear-checkpoint`
 4. If corrupted, manually delete: `rm .ai-scan-checkpoint.json`
+
+### Criteria Verification Issues
+
+**Problem**: Criteria verification taking too long
+
+**Solution**:
+1. Reduce batch size to process fewer criteria per API call:
+   ```bash
+   ai-scan-cli --input scans.csv --criteria-batch-size 5
+   ```
+2. Check if the issue is network-related (slow API responses)
+3. Use `--verbose` to monitor which batch is slow
+4. Consider skipping criteria verification for testing:
+   ```bash
+   ai-scan-cli --input scans.csv --skip-criteria-verification
+   ```
+
+**Problem**: Cache not working as expected
+
+**Solution**:
+1. Verify cache directory exists and is writable:
+   ```bash
+   ls -la ./.ai-scan-cache/
+   ```
+2. Check cache statistics:
+   ```bash
+   ai-scan-cli --cache-stats
+   ```
+3. Clear corrupted cache entries:
+   ```bash
+   ai-scan-cli --clear-cache
+   ```
+4. For testing, bypass cache entirely:
+   ```bash
+   ai-scan-cli --input scans.csv --no-cache
+   ```
+
+**Problem**: Criteria checkpoint not resuming correctly
+
+**Solution**:
+1. Check checkpoint directory:
+   ```bash
+   ls -la ./.ai-scan-checkpoints/
+   ```
+2. Verify checkpoint file is valid:
+   ```bash
+   cat ./.ai-scan-checkpoints/*.json
+   ```
+3. Start fresh if checkpoint is corrupted:
+   ```bash
+   ai-scan-cli --input scans.csv --fresh
+   ```
+
+**Problem**: Missing or incomplete criteria verification results
+
+**Possible Causes**:
+- Processing interrupted before all batches completed
+- API timeout during criteria batch processing
+- Cache returned stale results
+
+**Solution**:
+1. Re-run with `--no-cache` and `--fresh` flags:
+   ```bash
+   ai-scan-cli --input scans.csv --no-cache --fresh
+   ```
+2. Increase batch timeout via environment variable:
+   ```bash
+   AI_CRITERIA_BATCH_TIMEOUT=180000 ai-scan-cli --input scans.csv
+   ```
+3. Use smaller batch sizes for more reliable processing:
+   ```bash
+   ai-scan-cli --input scans.csv --criteria-batch-size 5
+   ```
 
 ## Exit Codes
 

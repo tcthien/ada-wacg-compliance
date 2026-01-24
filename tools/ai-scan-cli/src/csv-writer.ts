@@ -40,6 +40,7 @@ const CSV_HEADERS = [
   'ai_summary',
   'ai_remediation_plan',
   'ai_issues_json',
+  'ai_criteria_verifications_json',
   'tokens_used',
   'ai_model',
   'processing_time',
@@ -193,11 +194,14 @@ export async function writeCsv(
   const shouldIncludeHeader = includeHeader && (!append || !exists);
 
   // Convert ImportRow objects to arrays matching the header order
+  // Note: ai_criteria_verifications_json may contain 50+ verifications
+  // The csv-stringify library properly handles large JSON strings with quotes and special characters
   const records = rows.map((row) => [
     row.scan_id,
     row.ai_summary,
     row.ai_remediation_plan,
     row.ai_issues_json, // Already stringified JSON
+    row.ai_criteria_verifications_json ?? '', // Already stringified JSON, may contain 50+ verifications
     row.tokens_used,
     row.ai_model,
     row.processing_time,

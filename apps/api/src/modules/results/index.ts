@@ -14,6 +14,7 @@ export {
   type ResultMetadata,
   type FormattedResult,
   type CoverageMetrics,
+  type EnhancedCoverageResponse,
 } from './result.service.js';
 
 export {

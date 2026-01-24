@@ -1,0 +1,87 @@
+{
+  "key": {
+    "contentHash": "8a0c2e34b512b3f2",
+    "wcagLevel": "AA",
+    "batchNumber": 2
+  },
+  "verifications": [
+    {
+      "criterionId": "2.1.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "This page contains only static text content with a heading and paragraph. There are no interactive elements (links, buttons, form fields, or custom controls) that require keyboard accessibility. The page is purely informational text.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.1.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page contains no interactive elements, modals, embedded content, or custom widgets that could trap keyboard focus. With only static text content (h1 and p elements), there is no mechanism that could create a keyboard trap.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.1.4",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "No keyboard shortcuts are implemented on this page. There are no accesskey attributes, no JavaScript that could implement single-character shortcuts, and no custom keyboard handlers in the static HTML content provided.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.2.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page has no time limits, session timeouts, auto-refresh, meta refresh tags, countdown timers, or auto-advancing content. It is a static page displaying text content with no timing-related functionality.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.2.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page contains no moving, blinking, scrolling, or auto-updating content. There are no carousels, animations, scrolling tickers, animated GIFs, or auto-updating feeds. The content is entirely static text.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.3.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page contains no flashing or strobing content. There are no videos, CSS animations, animated GIFs, or JavaScript-driven effects that could cause flashing. The page displays only static text content.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.1",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 70,
+      "reasoning": "The page lacks skip navigation links and ARIA landmarks (main, nav, banner, contentinfo). While it has a proper heading structure (h1), there is no mechanism to bypass repeated content blocks. However, the page is simple with minimal content, so impact is reduced.",
+      "relatedIssueIds": [
+        "d14eb64e-4936-49e9-ab22-3a9e96b1be5d"
+      ]
+    },
+    {
+      "criterionId": "2.4.2",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 95,
+      "reasoning": "The <title> element in the <head> section is empty. The page has no descriptive title whatsoever. This is a clear violation as the title should describe the page content, which is an excerpt from Moby-Dick.",
+      "relatedIssueIds": [
+        "ee162c32-6195-4c7a-8789-2c7e167227fc"
+      ]
+    },
+    {
+      "criterionId": "2.4.3",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "The page has no interactive elements that require focus order consideration. There are no links, buttons, form fields, or custom widgets. The reading order of the static content (h1 followed by paragraph) follows a logical visual order.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.4",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page contains no links whatsoever. The accessibility tree snapshot confirms there are only heading and paragraph elements with no link elements present. This criterion is automatically satisfied when no links exist.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 7185,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:24:13.849Z",
+  "expiresAt": "2026-01-25T13:24:13.849Z"
+}

@@ -251,7 +251,7 @@ export const csvImportRowSchema = z.object({
 
   /**
    * Total tokens consumed for this AI processing
-   * Required - positive integer less than 100000
+   * Required - non-negative integer less than 100000 (0 allowed for cached results)
    * Sum of input tokens + output tokens
    */
   tokens_used: z
@@ -260,7 +260,7 @@ export const csvImportRowSchema = z.object({
       invalid_type_error: 'Tokens used must be a number',
     })
     .int('Tokens used must be an integer')
-    .positive('Tokens used must be positive')
+    .nonnegative('Tokens used must be zero or positive')
     .max(100000, 'Tokens used cannot exceed 100000'),
 
   /**
@@ -289,6 +289,29 @@ export const csvImportRowSchema = z.object({
     .int('Processing time must be an integer')
     .min(0, 'Processing time must be non-negative')
     .max(3600, 'Processing time cannot exceed 3600 seconds'),
+
+  /**
+   * AI-verified WCAG criteria in JSON format
+   * Optional - valid JSON array of criteria verifications
+   * Contains AI assessments of WCAG criteria that cannot be fully automated
+   */
+  ai_criteria_verifications_json: z
+    .string({
+      invalid_type_error: 'AI criteria verifications JSON must be a string',
+    })
+    .refine(
+      (val) => {
+        if (!val) return true; // Optional field
+        try {
+          const parsed = JSON.parse(val);
+          return Array.isArray(parsed);
+        } catch {
+          return false;
+        }
+      },
+      { message: 'AI criteria verifications JSON must be a valid JSON array' },
+    )
+    .optional(),
 });
 
 /**

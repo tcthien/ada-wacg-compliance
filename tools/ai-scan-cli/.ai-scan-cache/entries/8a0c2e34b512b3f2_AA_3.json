@@ -1,0 +1,85 @@
+{
+  "key": {
+    "contentHash": "8a0c2e34b512b3f2",
+    "wcagLevel": "AA",
+    "batchNumber": 3
+  },
+  "verifications": [
+    {
+      "criterionId": "2.4.5",
+      "status": "NOT_TESTED",
+      "confidence": 30,
+      "reasoning": "This page appears to be a standalone sample page (httpbin.org/html) displaying a Moby-Dick excerpt. There is no navigation menu, search functionality, sitemap, breadcrumbs, or links to related pages. However, this criterion applies to pages within a 'set of web pages' - this appears to be an isolated test page rather than part of a website structure, making the criterion potentially not applicable.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.6",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "The single heading 'Herman Melville - Moby-Dick' accurately describes the content that follows, which is an excerpt from Moby-Dick. The heading is descriptive rather than generic (not 'Section 1' or 'Content'). There are no form labels or buttons on this page to evaluate.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.7",
+      "status": "NOT_TESTED",
+      "confidence": 20,
+      "reasoning": "This page contains no interactive elements (no links, buttons, or form controls) that could receive keyboard focus. The focus visibility cannot be tested as there are no focusable elements present in the HTML.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.1",
+      "status": "NOT_TESTED",
+      "confidence": 40,
+      "reasoning": "This page contains only static text content with no interactive elements that could utilize multipoint or path-based gestures. There are no swipe carousels, pinch-zoom areas, drag-and-drop functionality, or other gesture-based interactions to evaluate.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.2",
+      "status": "NOT_TESTED",
+      "confidence": 40,
+      "reasoning": "This page contains no interactive elements that could be operated using a single pointer. There are no buttons, links, or other controls where pointer cancellation behavior could be evaluated.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.3",
+      "status": "NOT_TESTED",
+      "confidence": 40,
+      "reasoning": "This page contains no user interface components with text labels (no buttons, links, form fields, or other labeled controls). There are no elements where the relationship between visible text and accessible name could be evaluated.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.4",
+      "status": "NOT_TESTED",
+      "confidence": 45,
+      "reasoning": "This page contains only static text content with no functionality that uses device motion or user motion for operation. No shake-to-undo, tilt controls, or other motion-actuated features are present.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.1.1",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 95,
+      "reasoning": "The <html> element does not have a lang attribute. The HTML shows '<html>' without any lang attribute, which is required to programmatically identify the primary language of the page (English in this case).",
+      "relatedIssueIds": [
+        "d14eb64e-4936-49e9-ab22-3a9e96b1be5d"
+      ]
+    },
+    {
+      "criterionId": "3.1.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 70,
+      "reasoning": "The page content is entirely in English with no passages or phrases in other languages that would require lang attribute marking. The text is a literary excerpt from Moby-Dick with no foreign language content, technical terms from other languages, or multilingual sections.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.2.1",
+      "status": "NOT_TESTED",
+      "confidence": 35,
+      "reasoning": "This page contains no interactive elements that could receive focus (no links, form fields, buttons, or other focusable elements). There are no elements where focus-triggered context changes could occur or be evaluated.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 6957,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:24:45.222Z",
+  "expiresAt": "2026-01-25T13:24:45.222Z"
+}

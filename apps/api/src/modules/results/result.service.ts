@@ -7,7 +7,7 @@
 
 import { getFixGuideByRuleId } from '@adashield/core/utils';
 import type { FixGuide } from '@adashield/core/constants';
-import type { Issue, IssueImpact, WcagLevel } from '@adashield/core/types';
+import type { Issue, IssueImpact, WcagLevel, CriteriaVerification, CriteriaVerificationSummary, EnhancedCoverageMetrics } from '@adashield/core/types';
 import { getScanById, type ScanWithResult } from '../scans/scan.repository.js';
 import { coverageService, type CoverageMetrics, type AiStatus } from './coverage.service.js';
 
@@ -104,6 +104,35 @@ export interface ResultMetadata {
 export type { CoverageMetrics };
 
 /**
+ * Enhanced coverage response with criteria verifications
+ */
+export interface EnhancedCoverageResponse {
+  /** Actual computed coverage percentage: (criteriaChecked / criteriaTotal) * 100 */
+  coveragePercentage: number;
+  /** Number of unique WCAG criteria checked */
+  criteriaChecked: number;
+  /** Total WCAG criteria for the conformance level */
+  criteriaTotal: number;
+  /** Whether the scan is AI-enhanced */
+  isAiEnhanced: boolean;
+  /** AI model name if AI-enhanced (e.g., 'claude-opus-4') */
+  aiModel?: string;
+  /** Breakdown by criteria status */
+  breakdown: {
+    /** Number of criteria with issues found */
+    criteriaWithIssues: number;
+    /** Number of criteria that passed */
+    criteriaPassed: number;
+    /** Number of criteria verified by AI */
+    criteriaAiVerified: number;
+    /** Number of criteria not testable by automation */
+    criteriaNotTested: number;
+  };
+  /** Full list of criteria verifications (for criteria table) */
+  criteriaVerifications: CriteriaVerification[];
+}
+
+/**
  * Formatted scan result with enriched issues and metadata
  */
 export interface FormattedResult {
@@ -121,8 +150,10 @@ export interface FormattedResult {
   issuesByImpact: IssuesByImpact;
   /** Additional metadata about the scan */
   metadata: ResultMetadata;
-  /** Coverage metrics for trust indicators */
+  /** Legacy coverage metrics (for backward compatibility) */
   coverage: CoverageMetrics;
+  /** Enhanced coverage with criteria verifications */
+  enhancedCoverage: EnhancedCoverageResponse;
 }
 
 /**
@@ -272,7 +303,7 @@ export function formatResult(scanResult: ScanWithResult): FormattedResult {
   const scanDuration = scanResult.durationMs ??
     (scanResult.completedAt.getTime() - scanResult.createdAt.getTime());
 
-  // Calculate coverage metrics
+  // Calculate legacy coverage metrics (backward compatibility)
   const coverage = coverageService.calculateCoverage(
     {
       passedChecks: scanResult.scanResult.passedChecks,
@@ -283,6 +314,62 @@ export function formatResult(scanResult: ScanWithResult): FormattedResult {
     scanResult.aiEnabled ?? false,
     (scanResult.aiStatus as AiStatus) ?? null
   );
+
+  // Use stored criteria verifications if available (from AI import)
+  // Otherwise, compute from legacy data for backward compatibility
+  let criteriaVerifications: CriteriaVerification[];
+
+  const storedVerifications = scanResult.scanResult.criteriaVerifications;
+
+  if (storedVerifications && storedVerifications.length > 0) {
+    // Use stored AI verifications from the database
+    criteriaVerifications = storedVerifications.map(v => ({
+      criterionId: v.criterionId,
+      status: v.status as CriteriaVerification['status'],
+      scanner: v.scanner,
+      confidence: v.confidence ?? undefined,
+      reasoning: v.reasoning ?? undefined,
+      // Note: issueIds could be resolved from the relation if needed in future
+    }));
+  } else {
+    // Legacy fallback: compute from issues/passed checks for scans without stored verifications
+    const issues = scanResult.scanResult.issues.map(issue => ({
+      id: issue.id,
+      wcagCriteria: issue.wcagCriteria,
+    }));
+
+    criteriaVerifications = coverageService.computeVerificationsFromLegacyData(
+      {
+        passedChecks: scanResult.scanResult.passedChecks,
+        inapplicableChecks: scanResult.scanResult.inapplicableChecks,
+      },
+      issues,
+      scanResult.wcagLevel,
+      scanResult.scanResult.passedRuleIds ?? [] // Use stored passedRuleIds for accurate PASS status mapping
+    );
+  }
+
+  // Calculate enhanced coverage metrics from verifications
+  const enhancedMetrics = coverageService.calculateCoverageFromVerifications(
+    criteriaVerifications,
+    scanResult.wcagLevel
+  );
+
+  // Build enhanced coverage response
+  const enhancedCoverage: EnhancedCoverageResponse = {
+    coveragePercentage: enhancedMetrics.coveragePercentage,
+    criteriaChecked: enhancedMetrics.criteriaChecked,
+    criteriaTotal: enhancedMetrics.criteriaTotal,
+    isAiEnhanced: enhancedMetrics.isAiEnhanced,
+    aiModel: scanResult.aiModel ?? undefined,
+    breakdown: {
+      criteriaWithIssues: enhancedMetrics.summary.criteriaWithIssues,
+      criteriaPassed: enhancedMetrics.summary.criteriaPassed,
+      criteriaAiVerified: enhancedMetrics.summary.criteriaAiVerified,
+      criteriaNotTested: enhancedMetrics.summary.criteriaNotTested,
+    },
+    criteriaVerifications,
+  };
 
   // Build formatted result
   const formattedResult: FormattedResult = {
@@ -300,6 +387,7 @@ export function formatResult(scanResult: ScanWithResult): FormattedResult {
       inapplicableChecks: scanResult.scanResult.inapplicableChecks,
     },
     coverage,
+    enhancedCoverage,
   };
 
   return formattedResult;

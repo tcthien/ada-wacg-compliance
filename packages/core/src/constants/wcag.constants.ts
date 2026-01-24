@@ -664,3 +664,127 @@ export function getWCAGForAxeRule(ruleId: string): WCAGCriterion[] {
   const wcagIds = AXE_RULE_TO_WCAG[ruleId] || [];
   return wcagIds.map(id => WCAG_CRITERIA[id]).filter((criterion): criterion is WCAGCriterion => Boolean(criterion));
 }
+
+/**
+ * List of WCAG criteria that cannot be fully tested by automated tools (axe-core)
+ * and require human judgment or AI analysis.
+ *
+ * These criteria require understanding of:
+ * - Content semantics and meaning
+ * - Context and purpose
+ * - User experience factors
+ * - Audio/video content analysis
+ */
+export const UNTESTABLE_CRITERIA: string[] = [
+  // 1.1.x - Images and text alternatives require semantic understanding
+  // (1.1.1 is partially testable - presence check, not quality)
+
+  // 1.2.x - Time-based media (audio/video content analysis)
+  '1.2.1',  // Audio-only and Video-only
+  '1.2.2',  // Captions (Prerecorded) - quality check
+  '1.2.3',  // Audio Description or Media Alternative
+  '1.2.4',  // Captions (Live)
+  '1.2.5',  // Audio Description (Prerecorded)
+  '1.2.6',  // Sign Language (AAA)
+  '1.2.7',  // Extended Audio Description (AAA)
+  '1.2.8',  // Media Alternative (AAA)
+  '1.2.9',  // Audio-only Live (AAA)
+
+  // 1.3.x - Semantic understanding
+  '1.3.2',  // Meaningful Sequence - requires understanding reading order
+  '1.3.3',  // Sensory Characteristics - instructions context
+
+  // 1.4.x - Presentation and visual aspects
+  '1.4.1',  // Use of Color - requires understanding content meaning
+  '1.4.2',  // Audio Control
+  '1.4.5',  // Images of Text - requires OCR and context
+  '1.4.7',  // Low or No Background Audio (AAA)
+  '1.4.8',  // Visual Presentation (AAA)
+  '1.4.9',  // Images of Text - No Exception (AAA)
+
+  // 2.1.x - Keyboard accessibility
+  '2.1.4',  // Character Key Shortcuts - requires interaction testing
+
+  // 2.2.x - Timing
+  '2.2.1',  // Timing Adjustable - requires interaction testing
+  '2.2.2',  // Pause, Stop, Hide - partial, requires content analysis
+  '2.2.3',  // No Timing (AAA)
+  '2.2.4',  // Interruptions (AAA)
+  '2.2.5',  // Re-authenticating (AAA)
+  '2.2.6',  // Timeouts (AAA)
+
+  // 2.3.x - Seizures
+  '2.3.1',  // Three Flashes - requires video analysis
+  '2.3.2',  // Three Flashes (AAA)
+  '2.3.3',  // Animation from Interactions (AAA)
+
+  // 2.4.x - Navigation
+  '2.4.5',  // Multiple Ways - requires site-level analysis
+  '2.4.6',  // Headings and Labels - requires semantic understanding
+  '2.4.8',  // Location (AAA)
+  '2.4.9',  // Link Purpose - Link Only (AAA)
+  '2.4.10', // Section Headings (AAA)
+
+  // 2.5.x - Input modalities
+  '2.5.1',  // Pointer Gestures - requires interaction testing
+  '2.5.2',  // Pointer Cancellation
+  '2.5.4',  // Motion Actuation
+  '2.5.5',  // Target Size (AAA)
+  '2.5.6',  // Concurrent Input Mechanisms (AAA)
+
+  // 3.1.x - Readable
+  '3.1.3',  // Unusual Words (AAA)
+  '3.1.4',  // Abbreviations (AAA)
+  '3.1.5',  // Reading Level (AAA)
+  '3.1.6',  // Pronunciation (AAA)
+
+  // 3.2.x - Predictable
+  '3.2.1',  // On Focus - requires interaction testing
+  '3.2.2',  // On Input - requires interaction testing
+  '3.2.3',  // Consistent Navigation - requires multi-page analysis
+  '3.2.4',  // Consistent Identification - requires multi-page analysis
+  '3.2.5',  // Change on Request (AAA)
+
+  // 3.3.x - Input Assistance
+  '3.3.3',  // Error Suggestion - requires form testing
+  '3.3.4',  // Error Prevention - requires transaction analysis
+  '3.3.5',  // Help (AAA)
+  '3.3.6',  // Error Prevention - All (AAA)
+];
+
+/**
+ * Get untestable WCAG criteria filtered by conformance level
+ */
+export function getUntestableCriteria(level: WCAGLevel): WCAGCriterion[] {
+  const criteriaUpToLevel = getCriteriaUpToLevel(level);
+  const criteriaIds = criteriaUpToLevel.map(c => c.id);
+
+  return UNTESTABLE_CRITERIA
+    .filter(id => criteriaIds.includes(id))
+    .map(id => WCAG_CRITERIA[id])
+    .filter((criterion): criterion is WCAGCriterion => Boolean(criterion));
+}
+
+/**
+ * Get criteria that ARE testable by axe-core for a given level
+ */
+export function getTestableCriteria(level: WCAGLevel): WCAGCriterion[] {
+  const criteriaUpToLevel = getCriteriaUpToLevel(level);
+
+  return criteriaUpToLevel.filter(
+    criterion => !UNTESTABLE_CRITERIA.includes(criterion.id)
+  );
+}
+
+/**
+ * Get all unique WCAG criteria IDs covered by axe-core rules
+ */
+export function getAxeCoveredCriteria(): string[] {
+  const coveredCriteria = new Set<string>();
+
+  Object.values(AXE_RULE_TO_WCAG).forEach(criteriaIds => {
+    criteriaIds.forEach(id => coveredCriteria.add(id));
+  });
+
+  return Array.from(coveredCriteria).sort();
+}

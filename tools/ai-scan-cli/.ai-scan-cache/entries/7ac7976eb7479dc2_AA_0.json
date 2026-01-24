@@ -1,0 +1,88 @@
+{
+  "key": {
+    "contentHash": "7ac7976eb7479dc2",
+    "wcagLevel": "AA",
+    "batchNumber": 0
+  },
+  "verifications": [
+    {
+      "criterionId": "1.1.1",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 85,
+      "reasoning": "The page contains SVG elements used as icons within buttons (expand-operation buttons) that have aria-hidden='true' on the parent decorative SVG but the SVGs inside buttons lack accessible names. The accessibility tree shows multiple 'img' elements without text alternatives inside the expand buttons. The GitHub corner link has proper aria-label='View source on Github' and its SVG is correctly marked aria-hidden='true', which is correct. However, the button SVGs showing arrows appear to lack proper accessible names.",
+      "relatedIssueIds": [
+        "c6a2937b-5efe-40ef-8f0b-97baef420525",
+        "c8f3be2d-3774-4cd9-8f5c-f0e5288acd3c"
+      ]
+    },
+    {
+      "criterionId": "1.2.1",
+      "status": "NOT_TESTED",
+      "confidence": 95,
+      "reasoning": "No audio-only or video-only prerecorded media content was detected on this page. The page is an API documentation interface with no multimedia elements.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.2",
+      "status": "NOT_TESTED",
+      "confidence": 95,
+      "reasoning": "No video elements with audio content or synchronized media were detected on this page. The page contains only text, links, and interactive UI elements for API documentation.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.3",
+      "status": "NOT_TESTED",
+      "confidence": 95,
+      "reasoning": "No prerecorded video content was detected on this page. This criterion is not applicable as the page is a text-based API documentation interface.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.4",
+      "status": "NOT_TESTED",
+      "confidence": 95,
+      "reasoning": "No live audio or video streaming content was detected on this page. The page is static API documentation without any live media streams.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.5",
+      "status": "NOT_TESTED",
+      "confidence": 95,
+      "reasoning": "No prerecorded video content in synchronized media was detected on this page. This criterion cannot be evaluated as there are no video elements present.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.3.1",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 80,
+      "reasoning": "The page has structural issues: heading hierarchy jumps from h2 directly to h4 (skipping h3), which breaks the logical heading structure. The API section headings use h4 elements while the page title uses h2. The select element for 'Schemes' has a label but the label's 'for' attribute references 'schemes' which doesn't match the select's id. However, proper list elements (ul/li) are used for the 'Other Utilities' section.",
+      "relatedIssueIds": [
+        "dd4fc884-69e4-4fb9-865f-3379ae375580"
+      ]
+    },
+    {
+      "criterionId": "1.3.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 75,
+      "reasoning": "The DOM order appears to follow a logical reading sequence: page title, description, developer info, scheme selector, API method categories, and footer with utilities. The accessibility tree shows content in a meaningful order that matches the visual layout. No CSS reordering or tabindex manipulation that would disrupt reading order was detected.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.3.3",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 70,
+      "reasoning": "The page does not appear to rely solely on sensory characteristics for instructions. The buttons have text labels ('Expand operation'), links have descriptive text ('View source on Github', 'HTML form'), and the scheme selector is labeled with text 'Schemes'. No instructions were found that reference only shape, color, size, or location without accompanying text labels.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.3.4",
+      "status": "NOT_TESTED",
+      "confidence": 50,
+      "reasoning": "This criterion requires testing the page in both portrait and landscape orientations, which cannot be fully verified from static HTML analysis alone. No CSS or JavaScript was detected that explicitly locks orientation, but runtime behavior would need to be tested on actual mobile devices to confirm compliance.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 12005,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:40:03.763Z",
+  "expiresAt": "2026-01-25T13:40:03.763Z"
+}

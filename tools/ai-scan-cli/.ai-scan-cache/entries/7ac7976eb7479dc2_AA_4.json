@@ -1,0 +1,83 @@
+{
+  "key": {
+    "contentHash": "7ac7976eb7479dc2",
+    "wcagLevel": "AA",
+    "batchNumber": 4
+  },
+  "verifications": [
+    {
+      "criterionId": "3.2.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 65,
+      "reasoning": "The page contains a single dropdown (combobox) for selecting the scheme (https). This is a Swagger UI interface where dropdowns are used for configuration rather than navigation. The dropdown selection changes the API scheme setting but does not cause automatic navigation or form submission. However, full verification would require testing the actual behavior when the dropdown value changes.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.2.3",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "This criterion requires comparing navigation across multiple pages to verify consistent ordering. Only a single page was analyzed, making it impossible to verify navigation consistency across the website.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.2.4",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "This criterion requires comparing component identification across multiple pages. Only a single page was analyzed, making it impossible to verify consistent identification of components across the website.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.1",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "The main page does not contain user input forms that would generate validation errors. The Swagger UI may have form inputs when operations are expanded, but the current HTML snapshot shows no active form fields or error states to evaluate.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 70,
+      "reasoning": "The only visible form control on the page is the 'Schemes' dropdown which has a visible label 'Schemes' associated with it via the label element wrapping the select. The accessibility tree confirms the combobox has context. However, the Swagger UI may have additional form fields when operations are expanded that cannot be verified from this snapshot.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.3",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "No form validation errors are present in the current page content. This criterion requires observing error messages when input errors occur, which cannot be evaluated from a static page snapshot without active form submissions.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.4",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "This page is an API documentation and testing interface (httpbin.org). It does not appear to handle legal commitments, financial transactions, or user-controlled data modifications that would require confirmation steps. The criterion is not applicable to this content.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "4.1.1",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 75,
+      "reasoning": "The HTML contains duplicate ID attributes. The symbols 'unlocked', 'locked', 'close', 'large-arrow', 'large-arrow-down', 'jump-to', and 'expand' are defined twice in the page - once in the main document's SVG defs and again in the React-generated Swagger UI SVG defs. While browsers handle this gracefully, duplicate IDs can cause accessibility issues with ARIA references.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "4.1.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 75,
+      "reasoning": "Interactive elements have accessible names and roles. The 'Expand operation' buttons have accessible names via title attributes. The combobox for schemes is properly labeled. Links have descriptive text. The GitHub link has an aria-label. SVG icons within buttons are decorative and the buttons themselves have titles. Custom controls appear to expose appropriate roles and states.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "4.1.3",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "The page does not display any status messages (success notifications, error alerts, progress indicators, or search results) in its current state. Swagger UI may generate status messages when API calls are made, but these cannot be verified from the static page content.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 12292,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:42:38.341Z",
+  "expiresAt": "2026-01-25T13:42:38.341Z"
+}

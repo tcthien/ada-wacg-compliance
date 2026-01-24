@@ -61,3 +61,13 @@ export type {
   RateLimitHeaders,
   RateLimitError,
 } from './api.types.js';
+
+// Criteria verification types
+export type {
+  CriteriaStatus,
+  ScannerSource,
+  CriteriaVerification,
+  CriteriaVerificationSummary,
+  EnhancedCoverageMetrics,
+  BuildCriteriaVerificationsInput,
+} from './criteria.types.js';

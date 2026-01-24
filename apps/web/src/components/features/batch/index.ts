@@ -16,5 +16,5 @@ export { BatchUrlList } from './BatchUrlList';
 export { BatchExport } from './BatchExport';
 export { BatchResultsPreview } from './BatchResultsPreview';
 export { BatchUrlTable } from './BatchUrlTable';
-export { BatchCoverageCard, type BatchCoverageCardProps } from './BatchCoverageCard';
+export { BatchCoverageCard, type BatchCoverageCardProps, type BatchCriteriaBreakdown } from './BatchCoverageCard';
 export type { BatchUrl, BatchUrlTableProps } from './BatchUrlTable';

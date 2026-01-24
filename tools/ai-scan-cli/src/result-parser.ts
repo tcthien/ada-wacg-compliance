@@ -1,11 +1,105 @@
+/**
+ * @fileoverview Result Parser Module
+ *
+ * This module provides parsing and normalization functions for AI-generated accessibility
+ * scan results. It handles the extraction of JSON from various AI output formats (raw JSON,
+ * markdown code blocks, etc.) and normalizes the data to match expected TypeScript interfaces.
+ *
+ * ## Key Responsibilities
+ *
+ * 1. **JSON Extraction**: Extract valid JSON from AI responses that may contain:
+ *    - Raw JSON strings
+ *    - JSON wrapped in markdown code blocks (```json ... ```)
+ *    - JSON with nested code blocks in string values
+ *    - Mixed text and JSON output
+ *
+ * 2. **Data Normalization**: Convert raw AI output to strongly-typed interfaces:
+ *    - Validate required fields
+ *    - Apply default values for missing optional fields
+ *    - Normalize enum values (e.g., PASS -> AI_VERIFIED_PASS)
+ *    - Filter out completely invalid entries
+ *
+ * 3. **Criteria Verification Parsing**: Parse AI verification results with status normalization:
+ *    - PASS -> AI_VERIFIED_PASS (indicates AI verified the criterion passes)
+ *    - FAIL -> AI_VERIFIED_FAIL (indicates AI verified the criterion fails)
+ *    - NOT_TESTED -> NOT_TESTED (criterion could not be verified)
+ *
+ * ## Parsing Strategies
+ *
+ * The module employs multiple strategies to extract JSON, tried in order:
+ * 1. Direct JSON.parse() - For clean JSON output
+ * 2. Markdown code block extraction - For ```json ... ``` wrapped output
+ * 3. Object pattern matching - For responses with {results: [...]} structure
+ * 4. Array pattern matching - For array-only responses
+ * 5. Brace matching - For complex nested JSON with embedded code blocks
+ *
+ * @module result-parser
+ * @see {@link parseBatchVerificationOutput} for criteria verification parsing
+ * @see {@link parseClaudeOutput} for general scan result parsing
+ */
+
 import { randomUUID } from 'crypto';
-import type { ScanResult, Issue, ImpactLevel, AiIssueEnhancement } from './types.js';
+import type { ScanResult, Issue, ImpactLevel, AiIssueEnhancement, AiCriteriaVerification, CriteriaStatus } from './types.js';
 
 /**
- * Extracts JSON from markdown code blocks
- * Handles nested code blocks inside JSON strings by using greedy matching
- * @param output - Raw Claude Code output that may contain markdown
- * @returns Extracted JSON string or null if not found
+ * Result from parsing batch verification AI output.
+ *
+ * Contains an array of criteria verification results parsed from AI response.
+ * Each verification includes the criterion ID, status, confidence, and reasoning.
+ *
+ * @example
+ * const result: BatchVerificationResult = {
+ *   criteriaVerifications: [
+ *     {
+ *       criterionId: '1.1.1',
+ *       status: 'AI_VERIFIED_PASS',
+ *       confidence: 95,
+ *       reasoning: 'All images have descriptive alt text',
+ *       relatedIssueIds: []
+ *     }
+ *   ]
+ * };
+ */
+export interface BatchVerificationResult {
+  /** Array of parsed criteria verification results */
+  criteriaVerifications: AiCriteriaVerification[];
+}
+
+/**
+ * Extracts JSON from markdown code blocks.
+ *
+ * Handles various markdown code block formats that AI models may use to wrap JSON output.
+ * Uses multiple extraction strategies to handle edge cases like nested code blocks
+ * within JSON string values.
+ *
+ * ## Extraction Strategies
+ *
+ * 1. **```json block with greedy matching**: Finds ```json and extracts to the LAST closing ```.
+ *    This handles cases where JSON string values contain embedded code blocks.
+ *
+ * 2. **Generic ``` block**: Falls back to non-greedy matching for simple cases where
+ *    the first closing ``` is correct.
+ *
+ * @param output - Raw AI output that may contain markdown code blocks with JSON
+ * @returns The extracted JSON string, or null if no valid JSON found
+ *
+ * @example
+ * // Simple markdown code block
+ * const input = '```json\n{"status": "PASS"}\n```';
+ * const json = extractJsonFromMarkdown(input);
+ * // Returns: '{"status": "PASS"}'
+ *
+ * @example
+ * // JSON with embedded code block in string value
+ * const input = '```json\n{"code": "```html\\n<div>\\n```"}\n```';
+ * const json = extractJsonFromMarkdown(input);
+ * // Returns: '{"code": "```html\\n<div>\\n```"}'
+ *
+ * @example
+ * // No markdown - returns null
+ * const input = '{"status": "PASS"}';
+ * const json = extractJsonFromMarkdown(input);
+ * // Returns: null (use JSON.parse directly for this case)
  */
 export function extractJsonFromMarkdown(output: string): string | null {
   // Strategy 1: Find ```json block and extract to the LAST closing ```
@@ -42,11 +136,37 @@ export function extractJsonFromMarkdown(output: string): string | null {
 }
 
 /**
- * Extracts JSON by finding balanced braces
- * Scans for the first { and finds the matching closing }
- * Properly handles braces inside string values
- * @param output - Raw output that may contain JSON
- * @returns Extracted JSON string or null if not found
+ * Extracts JSON by finding balanced braces.
+ *
+ * A robust JSON extraction method that scans for the first opening brace `{`
+ * and finds its matching closing brace `}`, properly handling:
+ * - Braces inside string values (ignored)
+ * - Escaped characters within strings
+ * - Nested objects and arrays
+ *
+ * This is useful for extracting JSON from AI responses that contain
+ * explanatory text before or after the JSON object.
+ *
+ * @param output - Raw output that may contain JSON mixed with other text
+ * @returns The extracted JSON string, or null if no valid JSON object found
+ *
+ * @example
+ * // JSON with surrounding text
+ * const input = 'Here is the result:\n{"status": "PASS"}\nThat completes the analysis.';
+ * const json = extractJsonByBraceMatching(input);
+ * // Returns: '{"status": "PASS"}'
+ *
+ * @example
+ * // Nested JSON objects
+ * const input = '{"outer": {"inner": "value"}}';
+ * const json = extractJsonByBraceMatching(input);
+ * // Returns: '{"outer": {"inner": "value"}}'
+ *
+ * @example
+ * // Braces in string values are handled correctly
+ * const input = '{"code": "function() { return {}; }"}';
+ * const json = extractJsonByBraceMatching(input);
+ * // Returns: '{"code": "function() { return {}; }"}'
  */
 function extractJsonByBraceMatching(output: string): string | null {
   // Find the first opening brace
@@ -239,6 +359,183 @@ function normalizeEnhancements(rawEnhancements: unknown[]): AiIssueEnhancement[]
 }
 
 /**
+ * Valid CriteriaStatus values including raw AI output values.
+ *
+ * The AI may return simplified status values (PASS, FAIL) which need to be
+ * normalized to the full CriteriaStatus enum values (AI_VERIFIED_PASS, AI_VERIFIED_FAIL).
+ *
+ * @constant {string[]}
+ */
+const VALID_CRITERIA_STATUSES = ['PASS', 'FAIL', 'AI_VERIFIED_PASS', 'AI_VERIFIED_FAIL', 'NOT_TESTED'];
+
+/**
+ * Validates if a value is a valid CriteriaStatus (including raw AI values).
+ *
+ * Accepts both the simplified values that AI may return (PASS, FAIL) and
+ * the full enum values (AI_VERIFIED_PASS, AI_VERIFIED_FAIL, NOT_TESTED).
+ *
+ * @param value - The value to validate
+ * @returns True if the value is a valid criteria status string
+ *
+ * @example
+ * isValidCriteriaStatus('PASS');           // true
+ * isValidCriteriaStatus('AI_VERIFIED_PASS'); // true
+ * isValidCriteriaStatus('INVALID');        // false
+ * isValidCriteriaStatus(123);              // false
+ */
+function isValidCriteriaStatus(value: unknown): value is CriteriaStatus | 'PASS' | 'FAIL' {
+  return (
+    typeof value === 'string' &&
+    VALID_CRITERIA_STATUSES.includes(value)
+  );
+}
+
+/**
+ * Normalizes status values from AI output to CriteriaStatus enum.
+ *
+ * AI models may return simplified status values for brevity. This function
+ * maps them to the canonical CriteriaStatus values used in the application:
+ *
+ * - `PASS` -> `AI_VERIFIED_PASS` (AI confirmed criterion is satisfied)
+ * - `FAIL` -> `AI_VERIFIED_FAIL` (AI confirmed criterion is not satisfied)
+ * - `NOT_TESTED` -> `NOT_TESTED` (unchanged - criterion could not be verified)
+ * - `AI_VERIFIED_PASS` -> `AI_VERIFIED_PASS` (unchanged)
+ * - `AI_VERIFIED_FAIL` -> `AI_VERIFIED_FAIL` (unchanged)
+ *
+ * @param status - The raw status string from AI output
+ * @returns The normalized CriteriaStatus value
+ *
+ * @example
+ * normalizeCriteriaStatusValue('PASS');     // Returns: 'AI_VERIFIED_PASS'
+ * normalizeCriteriaStatusValue('FAIL');     // Returns: 'AI_VERIFIED_FAIL'
+ * normalizeCriteriaStatusValue('NOT_TESTED'); // Returns: 'NOT_TESTED'
+ */
+function normalizeCriteriaStatusValue(status: string): CriteriaStatus {
+  if (status === 'PASS') return 'AI_VERIFIED_PASS';
+  if (status === 'FAIL') return 'AI_VERIFIED_FAIL';
+  return status as CriteriaStatus;
+}
+
+/**
+ * Normalizes a raw criteria verification object from AI output.
+ *
+ * Validates required fields and applies defaults for optional fields.
+ * Normalizes status values (PASS -> AI_VERIFIED_PASS, FAIL -> AI_VERIFIED_FAIL).
+ *
+ * ## Required Fields
+ * - `criterionId` (string): WCAG criterion ID (e.g., "1.1.1")
+ * - `status` (string): One of PASS, FAIL, AI_VERIFIED_PASS, AI_VERIFIED_FAIL, NOT_TESTED
+ *
+ * ## Optional Fields with Defaults
+ * - `confidence` (number): 0-100, defaults to 70
+ * - `reasoning` (string): Explanation, defaults to empty string
+ * - `relatedIssueIds` (string[]): Related issue IDs, defaults to undefined
+ *
+ * @param rawVerification - Raw verification object from AI output
+ * @returns Normalized AiCriteriaVerification object, or null if validation fails
+ *
+ * @example
+ * // Valid input with all fields
+ * const result = normalizeCriteriaVerification({
+ *   criterionId: '1.1.1',
+ *   status: 'PASS',
+ *   confidence: 95,
+ *   reasoning: 'All images have alt text',
+ *   relatedIssueIds: ['issue-1']
+ * });
+ * // Returns: { criterionId: '1.1.1', status: 'AI_VERIFIED_PASS', confidence: 95, ... }
+ *
+ * @example
+ * // Minimal valid input (uses defaults)
+ * const result = normalizeCriteriaVerification({
+ *   criterionId: '1.2.1',
+ *   status: 'NOT_TESTED'
+ * });
+ * // Returns: { criterionId: '1.2.1', status: 'NOT_TESTED', confidence: 70, reasoning: '' }
+ *
+ * @example
+ * // Invalid input (missing required field)
+ * const result = normalizeCriteriaVerification({ status: 'PASS' });
+ * // Returns: null
+ */
+function normalizeCriteriaVerification(rawVerification: unknown): AiCriteriaVerification | null {
+  if (typeof rawVerification !== 'object' || rawVerification === null) {
+    return null;
+  }
+
+  const verification = rawVerification as Record<string, unknown>;
+
+  // criterionId is required
+  if (!verification.criterionId || typeof verification.criterionId !== 'string') {
+    return null;
+  }
+
+  // Status is required and must be valid
+  if (!isValidCriteriaStatus(verification.status)) {
+    return null;
+  }
+
+  // Normalize confidence (must be 0-100)
+  let confidence = 70; // default
+  if (typeof verification.confidence === 'number' &&
+      verification.confidence >= 0 &&
+      verification.confidence <= 100) {
+    confidence = Math.round(verification.confidence);
+  }
+
+  return {
+    criterionId: verification.criterionId,
+    // Normalize PASS -> AI_VERIFIED_PASS and FAIL -> AI_VERIFIED_FAIL
+    status: normalizeCriteriaStatusValue(verification.status as string),
+    confidence,
+    reasoning: typeof verification.reasoning === 'string' ? verification.reasoning : '',
+    relatedIssueIds: Array.isArray(verification.relatedIssueIds)
+      ? verification.relatedIssueIds.filter((id): id is string => typeof id === 'string')
+      : undefined,
+  };
+}
+
+/**
+ * Parses and normalizes an array of raw criteria verifications.
+ *
+ * Iterates through the raw verification array, normalizing each item and
+ * filtering out invalid entries. This provides a fault-tolerant parsing
+ * approach where partially valid AI output still yields usable results.
+ *
+ * @param rawVerifications - Array of raw verification objects from AI output
+ * @returns Array of normalized AiCriteriaVerification objects (invalid entries filtered out)
+ *
+ * @example
+ * const rawVerifications = [
+ *   { criterionId: '1.1.1', status: 'PASS', confidence: 90, reasoning: 'OK' },
+ *   { criterionId: '1.2.1', status: 'INVALID' }, // Invalid - will be filtered
+ *   { criterionId: '1.3.1', status: 'FAIL', confidence: 85, reasoning: 'Missing landmarks' }
+ * ];
+ *
+ * const results = parseCriteriaVerifications(rawVerifications);
+ * // Returns array with 2 items (1.1.1 and 1.3.1), the invalid one is filtered out
+ * console.log(results.length); // 2
+ * console.log(results[0].status); // 'AI_VERIFIED_PASS'
+ * console.log(results[1].status); // 'AI_VERIFIED_FAIL'
+ */
+export function parseCriteriaVerifications(rawVerifications: unknown[]): AiCriteriaVerification[] {
+  if (!Array.isArray(rawVerifications)) {
+    return [];
+  }
+
+  const normalized: AiCriteriaVerification[] = [];
+
+  for (const rawVerification of rawVerifications) {
+    const verification = normalizeCriteriaVerification(rawVerification);
+    if (verification) {
+      normalized.push(verification);
+    }
+  }
+
+  return normalized;
+}
+
+/**
  * Normalizes issues in a ScanResult object
  * Handles both legacy mode (with issues) and enhancement mode (with aiEnhancements)
  * @param result - Raw ScanResult object
@@ -261,10 +558,16 @@ function normalizeScanResult(result: unknown): ScanResult {
     ? normalizeEnhancements(scanResult.aiEnhancements)
     : undefined;
 
+  // Normalize criteria verifications if present
+  const criteriaVerifications = Array.isArray(scanResult.criteriaVerifications)
+    ? parseCriteriaVerifications(scanResult.criteriaVerifications)
+    : undefined;
+
   return {
     ...scanResult,
     issues,
     aiEnhancements,
+    criteriaVerifications,
   } as ScanResult;
 }
 
@@ -374,4 +677,147 @@ export function parseClaudeOutput(output: string): ScanResult[] {
   }
 
   return normalized;
+}
+
+/**
+ * Parses batch verification output from AI into structured BatchVerificationResult.
+ *
+ * This is the main entry point for parsing AI criteria verification responses.
+ * It handles various output formats and applies multiple extraction strategies
+ * to reliably extract the JSON content.
+ *
+ * ## Expected AI Output Format
+ *
+ * The AI should return JSON (possibly wrapped in markdown code blocks) with this structure:
+ *
+ * ```json
+ * {
+ *   "criteriaVerifications": [
+ *     {
+ *       "criterionId": "1.1.1",
+ *       "status": "PASS",           // or "FAIL", "NOT_TESTED"
+ *       "confidence": 85,           // 0-100
+ *       "reasoning": "All images have descriptive alt text that conveys purpose",
+ *       "relatedIssueIds": ["issue-uuid-1"]  // optional
+ *     },
+ *     {
+ *       "criterionId": "1.2.1",
+ *       "status": "NOT_TESTED",
+ *       "confidence": 0,
+ *       "reasoning": "No audio content found on page"
+ *     }
+ *   ]
+ * }
+ * ```
+ *
+ * ## Status Values
+ *
+ * The AI may return these status values (all are valid):
+ * - `PASS` - Normalized to `AI_VERIFIED_PASS`
+ * - `FAIL` - Normalized to `AI_VERIFIED_FAIL`
+ * - `AI_VERIFIED_PASS` - Used as-is
+ * - `AI_VERIFIED_FAIL` - Used as-is
+ * - `NOT_TESTED` - Used as-is (criterion could not be verified)
+ *
+ * ## Parsing Strategies
+ *
+ * The function tries these extraction methods in order:
+ * 1. Direct JSON.parse() - For clean JSON output
+ * 2. Markdown code block extraction - For ```json ... ``` wrapped output
+ * 3. Brace matching - For JSON with surrounding text or embedded code blocks
+ *
+ * @param output - Raw AI output that may contain JSON in various formats
+ * @returns BatchVerificationResult with parsed and normalized verifications
+ * @throws Error if JSON extraction fails or the structure is invalid
+ *
+ * @example
+ * // Parse clean JSON output
+ * const result = parseBatchVerificationOutput(JSON.stringify({
+ *   criteriaVerifications: [
+ *     { criterionId: '1.1.1', status: 'PASS', confidence: 90, reasoning: 'OK' }
+ *   ]
+ * }));
+ * console.log(result.criteriaVerifications[0].status); // 'AI_VERIFIED_PASS'
+ *
+ * @example
+ * // Parse markdown-wrapped output
+ * const aiOutput = `Here are the results:
+ * \`\`\`json
+ * {
+ *   "criteriaVerifications": [
+ *     { "criterionId": "1.1.1", "status": "FAIL", "confidence": 80, "reasoning": "Missing alt" }
+ *   ]
+ * }
+ * \`\`\`
+ * Analysis complete.`;
+ *
+ * const result = parseBatchVerificationOutput(aiOutput);
+ * console.log(result.criteriaVerifications[0].status); // 'AI_VERIFIED_FAIL'
+ *
+ * @example
+ * // Handle parsing errors
+ * try {
+ *   const result = parseBatchVerificationOutput('invalid output');
+ * } catch (error) {
+ *   console.error('Parsing failed:', error.message);
+ *   // "Failed to extract JSON from AI output: No valid JSON found"
+ * }
+ */
+export function parseBatchVerificationOutput(output: string): BatchVerificationResult {
+  // Strategy 1: Try direct JSON parsing
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    // Direct parsing failed, try extracting from markdown
+    const extractedJson = extractJsonFromMarkdown(output);
+    if (extractedJson) {
+      try {
+        parsed = JSON.parse(extractedJson);
+      } catch {
+        // Markdown extraction failed, try brace matching
+        const bracesExtracted = extractJsonByBraceMatching(output);
+        if (bracesExtracted) {
+          try {
+            parsed = JSON.parse(bracesExtracted);
+          } catch {
+            throw new Error('Failed to parse JSON from AI output: Invalid JSON structure');
+          }
+        } else {
+          throw new Error('Failed to extract JSON from AI output: No valid JSON found');
+        }
+      }
+    } else {
+      // Try brace matching as fallback
+      const bracesExtracted = extractJsonByBraceMatching(output);
+      if (bracesExtracted) {
+        try {
+          parsed = JSON.parse(bracesExtracted);
+        } catch {
+          throw new Error('Failed to parse JSON from AI output: Invalid JSON structure');
+        }
+      } else {
+        throw new Error('Failed to extract JSON from AI output: No valid JSON found');
+      }
+    }
+  }
+
+  // Validate parsed structure
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Invalid batch verification output: Expected an object');
+  }
+
+  const result = parsed as Record<string, unknown>;
+
+  // Extract criteriaVerifications array
+  if (!Array.isArray(result.criteriaVerifications)) {
+    throw new Error('Invalid batch verification output: Missing or invalid criteriaVerifications array');
+  }
+
+  // Parse and normalize each verification
+  const criteriaVerifications = parseCriteriaVerifications(result.criteriaVerifications);
+
+  return {
+    criteriaVerifications,
+  };
 }

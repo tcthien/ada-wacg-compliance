@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useScan } from '@/hooks/useScan';
 import { useScanResult } from '@/hooks/useScanResult';
@@ -9,7 +9,7 @@ import { useAiScanStatus } from '@/hooks/useAiScanStatus';
 import { useReportStatus } from '@/hooks/useReportStatus';
 import { ScanProgress } from '@/components/features/scan/ScanProgress';
 import { ResultsSummary } from '@/components/features/results/ResultsSummary';
-import { IssueList, type Issue } from '@/components/features/results/IssueList';
+import { ScanResultsTabs } from '@/components/features/results/ScanResultsTabs';
 import { ExportButton } from '@/components/features/export/ExportButton';
 import { ReportArtifacts } from '@/components/features/export/ReportArtifacts';
 import { ShareButton } from '@/components/ui/share-button';
@@ -17,38 +17,6 @@ import { ScanCoverageCard } from '@/components/features/compliance';
 import { AiStatusBadge } from '@/components/features/ai/AiStatusBadge';
 import { AiSummarySection } from '@/components/features/ai/AiSummarySection';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
-import type { IssuesByImpact } from '@/lib/api';
-
-/**
- * Flatten issuesByImpact into a single array for the IssueList component
- * Converts API issue format to component-expected format with AI data
- */
-function flattenIssues(issuesByImpact: IssuesByImpact): Issue[] {
-  const allIssues: Issue[] = [];
-
-  const impactLevels: (keyof IssuesByImpact)[] = ['critical', 'serious', 'moderate', 'minor'];
-
-  for (const level of impactLevels) {
-    const issues = issuesByImpact[level] || [];
-    for (const issue of issues) {
-      allIssues.push({
-        id: issue.id,
-        impact: level,
-        description: issue.description,
-        help: issue.helpText,
-        helpUrl: issue.helpUrl,
-        tags: issue.wcagCriteria,
-        nodes: issue.nodes,
-        // Include AI enhancement data if available (REQ-6 AC 3-4)
-        aiExplanation: issue.aiExplanation ?? null,
-        aiFixSuggestion: issue.aiFixSuggestion ?? null,
-        aiPriority: issue.aiPriority ?? null,
-      });
-    }
-  }
-
-  return allIssues;
-}
 
 export default function ScanResultPage() {
   const params = useParams();
@@ -111,13 +79,6 @@ export default function ScanResultPage() {
   } = useReportStatus(scanId, {
     enabled: scan?.status === 'COMPLETED',
   });
-
-  // Flatten issues from issuesByImpact for IssueList component
-  // Must be called unconditionally (React hooks rule)
-  const flattenedIssues = useMemo(
-    () => (result?.issuesByImpact ? flattenIssues(result.issuesByImpact) : []),
-    [result?.issuesByImpact]
-  );
 
   // Track funnel_scan_results_viewed on page load
   useEffect(() => {
@@ -423,16 +384,17 @@ export default function ScanResultPage() {
             </div>
 
             {/* Scan Coverage Card - Trust Indicators */}
+            {/* Uses enhancedCoverage for consistent stats with CriteriaTable */}
             <div className="mb-8">
               <ScanCoverageCard
-                coveragePercentage={result.coverage?.coveragePercentage ?? 57}
-                criteriaChecked={result.coverage?.criteriaChecked ?? 0}
-                criteriaTotal={result.coverage?.criteriaTotal ?? 50}
+                coveragePercentage={result.enhancedCoverage?.coveragePercentage ?? 57}
+                criteriaChecked={result.enhancedCoverage?.criteriaChecked ?? 0}
+                criteriaTotal={result.enhancedCoverage?.criteriaTotal ?? 50}
                 passedChecks={result.summary.passed}
-                isAiEnhanced={scan.aiEnabled ?? false}
+                isAiEnhanced={result.enhancedCoverage?.isAiEnhanced ?? false}
                 wcagLevel={result.wcagLevel}
-                aiStatus={aiStatus?.status}
-                breakdown={result.coverage?.breakdown}
+                {...(aiStatus?.status ? { aiStatus: aiStatus.status } : {})}
+                {...(result.enhancedCoverage?.breakdown ? { breakdown: result.enhancedCoverage.breakdown } : {})}
               />
             </div>
 
@@ -449,39 +411,24 @@ export default function ScanResultPage() {
           {/* Results Summary */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Summary</h2>
-            <ResultsSummary summary={result.summary} />
+            <ResultsSummary summary={result.summary} passed={result.summary.passed} />
           </div>
 
-          {/* Issue List */}
+          {/* Results Tabs - Issues and Criteria Coverage */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">
-              Issues Found ({result.summary.totalIssues})
+              Detailed Results
             </h2>
-            {flattenedIssues.length > 0 ? (
-              <IssueList
-                issues={flattenedIssues}
-                aiLoading={
-                  !!(scan.aiEnabled &&
-                  aiStatus?.status &&
-                  ['PENDING', 'DOWNLOADED', 'PROCESSING'].includes(aiStatus.status))
-                }
-              />
-            ) : (
-              <div className="bg-white rounded-lg border p-8 text-center">
-                <div className="text-6xl mb-4">✅</div>
-                <h3 className="text-xl font-semibold mb-2">
-                  No Issues Detected
-                </h3>
-                <p className="text-muted-foreground">
-                  Great job! No automated accessibility issues were found on
-                  this page.
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Remember: Manual testing is still recommended for complete
-                  compliance verification.
-                </p>
-              </div>
-            )}
+            <ScanResultsTabs
+              issuesByImpact={result.issuesByImpact}
+              {...(result.enhancedCoverage ? { enhancedCoverage: result.enhancedCoverage } : {})}
+              wcagLevel={result.wcagLevel}
+              aiLoading={
+                !!(scan.aiEnabled &&
+                aiStatus?.status &&
+                ['PENDING', 'DOWNLOADED', 'PROCESSING'].includes(aiStatus.status))
+              }
+            />
           </div>
 
           {/* Footer Actions */}

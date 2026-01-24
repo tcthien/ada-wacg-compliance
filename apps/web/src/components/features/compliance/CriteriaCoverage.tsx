@@ -25,6 +25,8 @@ export interface CriteriaCoverageProps {
   criteriaWithIssues?: number;
   /** Number of criteria that passed (optional breakdown) */
   criteriaPassed?: number;
+  /** Number of criteria verified by AI (optional, for AI-enhanced scans) */
+  criteriaAiVerified?: number;
   /** Number of criteria not testable by automation (optional breakdown) */
   criteriaNotTestable?: number;
   /** WCAG conformance level */
@@ -62,6 +64,7 @@ export function CriteriaCoverage({
   criteriaTotal,
   criteriaWithIssues = 0,
   criteriaPassed = 0,
+  criteriaAiVerified = 0,
   criteriaNotTestable = 0,
   wcagLevel,
   className,
@@ -176,6 +179,17 @@ export function CriteriaCoverage({
                   />
                   <span className="text-slate-700 dark:text-slate-300">
                     {criteriaPassed} criteria passed
+                  </span>
+                </li>
+              )}
+              {criteriaAiVerified > 0 && (
+                <li className="flex items-center gap-2">
+                  <span
+                    className="h-2 w-2 rounded-full bg-purple-500"
+                    aria-hidden="true"
+                  />
+                  <span className="text-slate-700 dark:text-slate-300">
+                    {criteriaAiVerified} criteria verified by AI
                   </span>
                 </li>
               )}

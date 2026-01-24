@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi, AiStatus } from '@/lib/admin-api';
-import { ArrowLeft, Trash2, RotateCw, AlertCircle, Layers, ExternalLink, Sparkles, Clock, Cpu } from 'lucide-react';
+import { ArrowLeft, Trash2, RotateCw, AlertCircle, Layers, ExternalLink, Sparkles, Clock, Cpu, TableProperties } from 'lucide-react';
 import Link from 'next/link';
 import { AdminScanConsole } from '@/components/admin/ScanConsole';
 import { AdminExportButton } from '@/components/admin/AdminExportButton';
 import { AiStatusBadge, AiSummarySection } from '@/components/features/ai';
+import { ScanResultsTabs } from '@/components/features/results/ScanResultsTabs';
+import { ScanCoverageCard } from '@/components/features/compliance';
+import type { IssuesByImpact, EnhancedCoverageResponse } from '@/lib/api';
 
 /**
  * Admin Scan Detail Page
@@ -184,6 +187,86 @@ function formatDuration(ms: number) {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60000).toFixed(1)}m`;
+}
+
+/**
+ * Wrapper component to handle data conversion for ScanResultsTabs in admin view
+ */
+function AdminScanResultsTabsWrapper({
+  issues,
+  wcagLevel,
+  aiModel,
+  aiStatus,
+}: {
+  issues: Issue[];
+  wcagLevel: 'A' | 'AA' | 'AAA';
+  aiModel?: string;
+  aiStatus?: AiStatus;
+}) {
+  // Convert issues to IssuesByImpact format
+  const issuesByImpact = useMemo(() => convertIssuesToByImpact(issues), [issues]);
+
+  // Determine AI loading state
+  const aiLoading = aiStatus === 'PENDING' || aiStatus === 'DOWNLOADED' || aiStatus === 'PROCESSING';
+
+  return (
+    <ScanResultsTabs
+      issuesByImpact={issuesByImpact}
+      wcagLevel={wcagLevel}
+      aiLoading={aiLoading}
+      isAdmin={true}
+    />
+  );
+}
+
+/**
+ * Convert admin issues array to IssuesByImpact format for ScanResultsTabs
+ */
+function convertIssuesToByImpact(issues: Issue[]): IssuesByImpact {
+  const result: IssuesByImpact = {
+    critical: [],
+    serious: [],
+    moderate: [],
+    minor: [],
+  };
+
+  for (const issue of issues) {
+    // Convert to the format expected by IssuesByImpact
+    const enrichedIssue = {
+      id: issue.id,
+      scanResultId: '', // Not available in admin response
+      ruleId: issue.ruleId,
+      wcagCriteria: issue.wcagCriteria,
+      impact: issue.impact,
+      description: issue.description,
+      helpText: issue.helpText,
+      helpUrl: issue.helpUrl,
+      htmlSnippet: issue.htmlSnippet || '',
+      cssSelector: issue.cssSelector || '',
+      nodes: issue.nodes || [],
+      createdAt: issue.createdAt,
+      aiExplanation: issue.aiExplanation,
+      aiFixSuggestion: issue.aiFixSuggestion,
+      aiPriority: issue.aiPriority,
+    };
+
+    switch (issue.impact) {
+      case 'CRITICAL':
+        result.critical.push(enrichedIssue);
+        break;
+      case 'SERIOUS':
+        result.serious.push(enrichedIssue);
+        break;
+      case 'MODERATE':
+        result.moderate.push(enrichedIssue);
+        break;
+      case 'MINOR':
+        result.minor.push(enrichedIssue);
+        break;
+    }
+  }
+
+  return result;
 }
 
 export default function ScanDetailPage() {
@@ -664,138 +747,20 @@ export default function ScanDetailPage() {
             </div>
           </div>
 
-          {/* Issues list */}
-          {scan.scanResult.issues.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Issues Found ({scan.scanResult.issues.length})
-              </h2>
-
-              <div className="space-y-4">
-                {scan.scanResult.issues.map((issue) => (
-                  <div
-                    key={issue.id}
-                    className={`border rounded-lg p-4 ${getIssueColor(issue.impact)}`}
-                  >
-                    {/* Issue header */}
-                    <div className="flex items-start justify-between gap-4 mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                            issue.impact === 'CRITICAL' ? 'bg-red-600 text-white' :
-                            issue.impact === 'SERIOUS' ? 'bg-orange-600 text-white' :
-                            issue.impact === 'MODERATE' ? 'bg-yellow-600 text-white' :
-                            'bg-blue-600 text-white'
-                          }`}>
-                            {issue.impact}
-                          </span>
-                          <span className="text-xs font-mono text-gray-600">{issue.ruleId}</span>
-                        </div>
-                        <h3 className="text-sm font-semibold text-gray-900">{issue.description}</h3>
-                      </div>
-                    </div>
-
-                    {/* WCAG criteria */}
-                    {issue.wcagCriteria.length > 0 && (
-                      <div className="mb-3">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          WCAG Criteria
-                        </label>
-                        <div className="flex flex-wrap gap-1">
-                          {issue.wcagCriteria.map((criteria, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white text-gray-700 border border-gray-300"
-                            >
-                              {criteria}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Help text */}
-                    <div className="mb-3">
-                      <p className="text-xs text-gray-700">{issue.helpText}</p>
-                    </div>
-
-                    {/* Element info */}
-                    {issue.cssSelector && (
-                      <div className="mb-2">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Element
-                        </label>
-                        <code className="block text-xs font-mono bg-white text-gray-800 p-2 rounded border border-gray-300 break-all">
-                          {issue.cssSelector}
-                        </code>
-                      </div>
-                    )}
-
-                    {/* HTML snippet */}
-                    {issue.htmlSnippet && (
-                      <div className="mb-3">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          HTML Snippet
-                        </label>
-                        <code className="block text-xs font-mono bg-white text-gray-800 p-2 rounded border border-gray-300 overflow-x-auto">
-                          {issue.htmlSnippet}
-                        </code>
-                      </div>
-                    )}
-
-                    {/* Help URL */}
-                    <div>
-                      <a
-                        href={issue.helpUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:text-blue-800 underline"
-                      >
-                        Learn more about this issue
-                      </a>
-                    </div>
-
-                    {/* AI Enhancement Section - Only show if any AI data exists */}
-                    {(issue.aiExplanation || issue.aiFixSuggestion || issue.aiPriority) && (
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Sparkles className="h-4 w-4 text-purple-600" />
-                          <span className="text-sm font-medium text-purple-800">AI Analysis</span>
-                          {issue.aiPriority && (
-                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
-                              Priority: {issue.aiPriority}/10
-                            </span>
-                          )}
-                        </div>
-
-                        {issue.aiExplanation && (
-                          <div className="mb-3">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              AI Explanation
-                            </label>
-                            <p className="text-sm text-gray-700 bg-purple-50 p-3 rounded whitespace-pre-wrap">
-                              {issue.aiExplanation}
-                            </p>
-                          </div>
-                        )}
-
-                        {issue.aiFixSuggestion && (
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              AI Fix Suggestion
-                            </label>
-                            <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto whitespace-pre-wrap">
-                              {issue.aiFixSuggestion}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {/* Tabbed Issues and Criteria Coverage - Admin View */}
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <TableProperties className="h-5 w-5 text-gray-600" />
+              <h2 className="text-xl font-bold text-gray-900">Issues & Coverage</h2>
             </div>
-          )}
+
+            <AdminScanResultsTabsWrapper
+              issues={scan.scanResult.issues}
+              wcagLevel={scan.wcagLevel}
+              {...(scan.aiModel ? { aiModel: scan.aiModel } : {})}
+              {...(scan.aiStatus ? { aiStatus: scan.aiStatus } : {})}
+            />
+          </div>
         </>
       )}
 

@@ -16,6 +16,12 @@ export interface CoverageDisclaimerProps {
   isAiEnhanced?: boolean;
   /** Current AI processing status */
   aiStatus?: AiStatus;
+  /** Actual computed coverage percentage (optional, uses default if not provided) */
+  coveragePercentage?: number;
+  /** Number of criteria checked out of total */
+  criteriaChecked?: number;
+  /** Total criteria for the conformance level */
+  criteriaTotal?: number;
   /** Additional CSS classes */
   className?: string;
 }
@@ -99,6 +105,9 @@ function getAiStatusMessage(aiStatus: AiStatus | undefined): {
 export function CoverageDisclaimer({
   isAiEnhanced = false,
   aiStatus,
+  coveragePercentage: providedCoverage,
+  criteriaChecked,
+  criteriaTotal,
   className,
 }: CoverageDisclaimerProps) {
   // Determine if AI enhancement is fully completed
@@ -109,8 +118,16 @@ export function CoverageDisclaimer({
     isAiEnhanced ? aiStatus : undefined
   );
 
-  // Determine coverage percentage and styling
-  const coveragePercentage = isAiCompleted ? '75-85%' : '57%';
+  // Use actual coverage percentage if provided, otherwise use defaults
+  const displayPercentage = providedCoverage !== undefined
+    ? `${Math.round(providedCoverage)}%`
+    : (isAiCompleted ? '75-85%' : '57%');
+
+  // Format criteria information if available
+  const criteriaInfo = (criteriaChecked !== undefined && criteriaTotal !== undefined)
+    ? ` (${criteriaChecked} of ${criteriaTotal} criteria)`
+    : '';
+
   const scanType = isAiCompleted ? 'AI-enhanced' : 'Automated';
 
   if (isAiCompleted) {
@@ -136,8 +153,8 @@ export function CoverageDisclaimer({
               <AiEnhancedBadge />
             </div>
             <p className="text-sm text-purple-800 dark:text-purple-200">
-              {scanType} testing detects approximately{' '}
-              <strong className="font-semibold">{coveragePercentage}</strong> of WCAG issues.
+              {scanType} testing covers approximately{' '}
+              <strong className="font-semibold">{displayPercentage}</strong> of WCAG criteria{criteriaInfo}.
               Manual testing by accessibility experts is recommended for complete compliance verification.
             </p>
             <p className="text-xs text-purple-700 dark:text-purple-300 mt-2">
@@ -166,8 +183,8 @@ export function CoverageDisclaimer({
         <InfoIcon className="text-amber-600 dark:text-amber-500 mt-0.5" />
         <div className="flex-1">
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            <strong>Important:</strong> {scanType} testing detects approximately{' '}
-            <strong>{coveragePercentage}</strong> of WCAG issues. Manual testing by accessibility
+            <strong>Important:</strong> {scanType} testing covers approximately{' '}
+            <strong>{displayPercentage}</strong> of WCAG criteria{criteriaInfo}. Manual testing by accessibility
             experts is recommended for complete compliance verification.
           </p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">

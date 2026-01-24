@@ -11,10 +11,26 @@ import { CriteriaCoverage } from './CriteriaCoverage';
 type WcagLevel = 'A' | 'AA' | 'AAA';
 
 /**
+ * Criteria breakdown including AI verification counts
+ */
+export interface CriteriaBreakdown {
+  /** Number of criteria with issues found */
+  criteriaWithIssues: number;
+  /** Number of criteria that passed */
+  criteriaPassed: number;
+  /** Number of criteria verified by AI (optional, for AI-enhanced scans) */
+  criteriaAiVerified?: number;
+  /** Number of criteria not testable by automation */
+  criteriaNotTestable?: number;
+  /** Number of criteria not tested (alias for criteriaNotTestable) */
+  criteriaNotTested?: number;
+}
+
+/**
  * Props for ScanCoverageCard component
  */
 export interface ScanCoverageCardProps {
-  /** Coverage percentage (57 or 80) */
+  /** Actual computed coverage percentage: (criteriaChecked / criteriaTotal) * 100 */
   coveragePercentage: number;
   /** Number of WCAG criteria checked */
   criteriaChecked: number;
@@ -29,11 +45,7 @@ export interface ScanCoverageCardProps {
   /** AI processing status */
   aiStatus?: AiStatus;
   /** Breakdown of criteria by status */
-  breakdown?: {
-    criteriaWithIssues: number;
-    criteriaPassed: number;
-    criteriaNotTestable: number;
-  };
+  breakdown?: CriteriaBreakdown;
   /** Additional CSS classes */
   className?: string;
 }
@@ -121,8 +133,17 @@ export function ScanCoverageCard({
   // Determine if AI enhancement is fully completed
   const isAiCompleted = isAiEnhanced && aiStatus === 'COMPLETED';
 
-  // Format coverage percentage display
-  const coverageDisplay = isAiCompleted ? '75-85%' : `${coveragePercentage}%`;
+  // Use actual computed coverage percentage
+  // Round to nearest integer for clean display
+  const roundedCoverage = Math.round(coveragePercentage);
+  const coverageDisplay = `${roundedCoverage}%`;
+
+  // Determine coverage quality for styling
+  // High coverage (>70%) gets positive styling
+  const isHighCoverage = roundedCoverage >= 70;
+
+  // Normalize breakdown to handle both API formats
+  const normalizedNotTestable = breakdown?.criteriaNotTestable ?? breakdown?.criteriaNotTested ?? 0;
 
   return (
     <div
@@ -166,15 +187,17 @@ export function ScanCoverageCard({
                   'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold',
                   isAiCompleted
                     ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                    : isHighCoverage
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                     : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                 )}
               >
-                {isAiCompleted ? '~80' : '57'}
+                {roundedCoverage}
               </div>
             }
             value={coverageDisplay}
             label="Detection Coverage"
-            sublabel={isAiCompleted ? 'AI-enhanced' : 'Standard'}
+            sublabel={isAiCompleted ? 'AI-enhanced' : `${criteriaChecked}/${criteriaTotal} criteria`}
           />
 
           {/* Criteria Coverage - use the interactive component */}
@@ -182,9 +205,10 @@ export function ScanCoverageCard({
             <CriteriaCoverage
               criteriaChecked={criteriaChecked}
               criteriaTotal={criteriaTotal}
-              criteriaWithIssues={breakdown?.criteriaWithIssues}
-              criteriaPassed={breakdown?.criteriaPassed}
-              criteriaNotTestable={breakdown?.criteriaNotTestable}
+              {...(breakdown?.criteriaWithIssues !== undefined ? { criteriaWithIssues: breakdown.criteriaWithIssues } : {})}
+              {...(breakdown?.criteriaPassed !== undefined ? { criteriaPassed: breakdown.criteriaPassed } : {})}
+              {...(breakdown?.criteriaAiVerified !== undefined ? { criteriaAiVerified: breakdown.criteriaAiVerified } : {})}
+              criteriaNotTestable={normalizedNotTestable}
               wcagLevel={wcagLevel}
             />
           </div>
@@ -203,7 +227,10 @@ export function ScanCoverageCard({
         {/* Coverage Disclaimer */}
         <CoverageDisclaimer
           isAiEnhanced={isAiEnhanced}
-          aiStatus={aiStatus}
+          {...(aiStatus ? { aiStatus } : {})}
+          coveragePercentage={coveragePercentage}
+          criteriaChecked={criteriaChecked}
+          criteriaTotal={criteriaTotal}
         />
       </div>
     </div>

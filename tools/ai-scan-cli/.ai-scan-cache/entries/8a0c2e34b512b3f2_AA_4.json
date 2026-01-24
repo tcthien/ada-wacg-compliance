@@ -1,0 +1,83 @@
+{
+  "key": {
+    "contentHash": "8a0c2e34b512b3f2",
+    "wcagLevel": "AA",
+    "batchNumber": 4
+  },
+  "verifications": [
+    {
+      "criterionId": "3.2.2",
+      "status": "NOT_TESTED",
+      "confidence": 90,
+      "reasoning": "This page contains no interactive form elements (no inputs, dropdowns, checkboxes, or radio buttons). It is a static content page displaying only a heading and a paragraph of text from Moby-Dick. There are no user interface components whose settings could trigger context changes.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.2.3",
+      "status": "NOT_TESTED",
+      "confidence": 30,
+      "reasoning": "This criterion requires comparison across multiple pages within a website to verify consistent navigation placement and ordering. Only a single page is available for analysis, and this page contains no navigation elements. Cannot determine consistency without examining other pages in the site.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.2.4",
+      "status": "NOT_TESTED",
+      "confidence": 30,
+      "reasoning": "This criterion requires comparison across multiple pages to verify that components with the same functionality are identified consistently. This single page contains no interactive components, search fields, or navigation elements to compare. Cannot verify without examining other pages.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.1",
+      "status": "NOT_TESTED",
+      "confidence": 90,
+      "reasoning": "This page contains no form inputs or interactive elements that could generate input errors. It is a static content page with only a heading and paragraph text. Error identification requirements are not applicable to this content.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.2",
+      "status": "NOT_TESTED",
+      "confidence": 90,
+      "reasoning": "This page contains no form inputs or user input fields that would require labels or instructions. The page displays only static content (a heading and a paragraph of literary text). This criterion is not applicable to this content.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.3",
+      "status": "NOT_TESTED",
+      "confidence": 90,
+      "reasoning": "This page contains no form inputs or interactive elements that could generate input errors requiring suggestions. It is a static content page with no user input mechanisms. Error suggestion requirements are not applicable.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.3.4",
+      "status": "NOT_TESTED",
+      "confidence": 90,
+      "reasoning": "This page does not contain any forms for legal commitments, financial transactions, or user-controllable data modification. It is a static content page displaying literary text. Error prevention requirements for transactional content are not applicable.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "4.1.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "The HTML is well-formed with proper document structure. Elements have complete start and end tags (<html>, <head>, <body>, <h1>, <div>, <p>). Elements are properly nested. No duplicate IDs are present (no ID attributes used). No duplicate attributes detected on any elements.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "4.1.2",
+      "status": "NOT_TESTED",
+      "confidence": 85,
+      "reasoning": "This page contains no user interface components (no forms, buttons, custom controls, or interactive widgets). The only elements are a heading and a paragraph of static text, which are standard HTML elements with inherent semantic meaning. There are no components requiring programmatic name, role, or value exposure.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "4.1.3",
+      "status": "NOT_TESTED",
+      "confidence": 85,
+      "reasoning": "This page contains no dynamic status messages, form submissions, search functionality, or progress indicators. It is a static content page with no mechanisms that would generate status messages requiring ARIA live regions or status roles.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 7338,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:25:15.500Z",
+  "expiresAt": "2026-01-25T13:25:15.500Z"
+}

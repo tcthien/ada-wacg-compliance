@@ -134,6 +134,62 @@ export interface CoverageMetrics {
   breakdown: CoverageBreakdown;
 }
 
+/**
+ * Criteria verification status
+ */
+export type CriteriaStatus = 'PASS' | 'FAIL' | 'AI_VERIFIED_PASS' | 'AI_VERIFIED_FAIL' | 'NOT_TESTED';
+
+/**
+ * Scanner source type
+ */
+export type ScannerSource = 'axe-core' | 'axe-core + AI' | 'N/A' | string;
+
+/**
+ * Individual criteria verification
+ */
+export interface CriteriaVerification {
+  criterionId: string;
+  status: CriteriaStatus;
+  scanner: ScannerSource;
+  issueIds?: string[];
+  confidence?: number;
+  reasoning?: string;
+}
+
+/**
+ * Enhanced coverage breakdown with AI verification counts
+ */
+export interface EnhancedCoverageBreakdown {
+  /** Number of criteria with issues found */
+  criteriaWithIssues: number;
+  /** Number of criteria that passed */
+  criteriaPassed: number;
+  /** Number of criteria verified by AI */
+  criteriaAiVerified: number;
+  /** Number of criteria not testable by automation */
+  criteriaNotTested: number;
+}
+
+/**
+ * Enhanced coverage response with criteria verifications
+ */
+export interface EnhancedCoverageResponse {
+  /** Actual computed coverage percentage: (criteriaChecked / criteriaTotal) * 100 */
+  coveragePercentage: number;
+  /** Number of unique WCAG criteria checked */
+  criteriaChecked: number;
+  /** Total WCAG criteria for the conformance level */
+  criteriaTotal: number;
+  /** Whether the scan is AI-enhanced */
+  isAiEnhanced: boolean;
+  /** AI model name if AI-enhanced (e.g., 'claude-opus-4') */
+  aiModel?: string;
+  /** Breakdown by criteria status */
+  breakdown: EnhancedCoverageBreakdown;
+  /** Full list of criteria verifications (for criteria table) */
+  criteriaVerifications: CriteriaVerification[];
+}
+
 export interface ScanResultResponse {
   scanId: string;
   url: string;
@@ -151,6 +207,8 @@ export interface ScanResultResponse {
   metadata: ResultMetadata;
   /** Coverage metrics for trust indicators (optional for backward compatibility) */
   coverage?: CoverageMetrics;
+  /** Enhanced coverage with criteria verifications (for criteria table) */
+  enhancedCoverage?: EnhancedCoverageResponse;
 }
 
 export interface ScanListResponse {

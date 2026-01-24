@@ -86,7 +86,9 @@ export function useDiscoveryFlowV2() {
 
     if (currentIndex > 0) {
       const previousStep = stepOrder[currentIndex - 1];
-      store.setCurrentStep(previousStep);
+      if (previousStep) {
+        store.setCurrentStep(previousStep);
+      }
     }
   };
 

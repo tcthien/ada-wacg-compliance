@@ -20,6 +20,10 @@
       "types": "./dist/constants/index.d.ts",
       "import": "./dist/constants/index.js"
     },
+    "./constants/browser": {
+      "types": "./dist/constants/browser.d.ts",
+      "import": "./dist/constants/browser.js"
+    },
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"

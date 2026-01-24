@@ -1,0 +1,83 @@
+{
+  "key": {
+    "contentHash": "8a0c2e34b512b3f2",
+    "wcagLevel": "AA",
+    "batchNumber": 1
+  },
+  "verifications": [
+    {
+      "criterionId": "1.3.5",
+      "status": "NOT_TESTED",
+      "confidence": 95,
+      "reasoning": "This page contains no form inputs or fields that collect user information. The page consists only of a heading and a paragraph of literary text from Moby-Dick, with no interactive form elements present.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "The page contains only a heading and paragraph text with no links, required fields, error states, charts, graphs, or status indicators that could rely solely on color to convey information. The content is purely textual without color-dependent information.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.2",
+      "status": "NOT_TESTED",
+      "confidence": 95,
+      "reasoning": "No audio or video elements are present on this page. The HTML contains only static text content (heading and paragraph), with no <audio>, <video>, <embed>, or <object> elements that could auto-play media.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.3",
+      "status": "NOT_TESTED",
+      "confidence": 40,
+      "reasoning": "The HTML contains no inline styles or CSS that would allow verification of text contrast ratios. Without access to the computed styles or visual rendering, contrast ratios cannot be determined from the static HTML alone. Manual testing with a color contrast analyzer is required.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.4",
+      "status": "NOT_TESTED",
+      "confidence": 35,
+      "reasoning": "Text resize verification at 200% zoom requires interactive browser testing to observe if content overflows, truncates, or causes horizontal scrolling. This cannot be determined from static HTML analysis alone.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.5",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page uses real HTML text for all content. The heading uses an <h1> element and the body content uses a <p> element with actual text. No <img> elements containing text content are present. All textual information is conveyed using proper HTML text elements.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.10",
+      "status": "NOT_TESTED",
+      "confidence": 35,
+      "reasoning": "Reflow verification at 320px width requires browser rendering to observe if horizontal scrolling occurs or content is cut off. The simple HTML structure suggests it would likely reflow well, but this cannot be confirmed without viewport testing.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.11",
+      "status": "NOT_TESTED",
+      "confidence": 90,
+      "reasoning": "This page contains no UI components (buttons, form inputs, custom controls) or meaningful graphical objects that require contrast verification. The content consists only of text within heading and paragraph elements.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.12",
+      "status": "NOT_TESTED",
+      "confidence": 35,
+      "reasoning": "Text spacing verification requires applying WCAG-specified spacing values (line-height 1.5, letter-spacing 0.12em, word-spacing 0.16em, paragraph spacing 2em) and observing if content clips or overflows. This requires interactive CSS modification testing.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.4.13",
+      "status": "NOT_TESTED",
+      "confidence": 90,
+      "reasoning": "The page contains no hover or focus-triggered content such as tooltips, dropdowns, or popovers. There are no interactive elements that would reveal additional content on hover or focus. The page is purely static text content.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 6822,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:23:43.244Z",
+  "expiresAt": "2026-01-25T13:23:43.244Z"
+}

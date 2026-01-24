@@ -7,6 +7,53 @@
  */
 
 /**
+ * Criteria verification status for export
+ */
+export type CriteriaExportStatus = 'PASS' | 'FAIL' | 'AI_VERIFIED_PASS' | 'AI_VERIFIED_FAIL' | 'NOT_TESTED';
+
+/**
+ * Criteria verification detail for export
+ */
+export interface CriteriaVerificationExport {
+  /** WCAG criterion ID (e.g., "1.1.1") */
+  criterionId: string;
+  /** Criterion name */
+  name: string;
+  /** WCAG level (A, AA, AAA) */
+  level: string;
+  /** Verification status */
+  status: CriteriaExportStatus;
+  /** Scanner that verified this criterion */
+  scanner: 'axe-core' | 'AI' | 'N/A';
+  /** AI confidence score (0-100), only for AI-verified criteria */
+  confidence?: number;
+  /** AI reasoning, only for AI-verified criteria */
+  reasoning?: string;
+  /** Related issue IDs if status is FAIL */
+  relatedIssueIds?: string[];
+}
+
+/**
+ * Criteria coverage summary for export
+ */
+export interface CriteriaCoverageSummary {
+  /** Total criteria for the WCAG level */
+  total: number;
+  /** Number of criteria checked */
+  checked: number;
+  /** Number of criteria passed */
+  passed: number;
+  /** Number of criteria failed */
+  failed: number;
+  /** Number of criteria AI-verified */
+  aiVerified: number;
+  /** Number of criteria not testable */
+  notTestable: number;
+  /** Coverage percentage */
+  coveragePercentage: number;
+}
+
+/**
  * Issue detail structure matching single scan export format
  */
 export interface BatchIssueDetail {
@@ -50,6 +97,10 @@ export interface BatchUrlResult {
     passed: number;
   };
   issues: BatchIssueDetail[];
+  /** Criteria coverage summary for this URL */
+  criteriaCoverage?: CriteriaCoverageSummary;
+  /** Detailed criteria verifications (admin export only) */
+  criteriaVerifications?: CriteriaVerificationExport[];
 }
 
 /**
@@ -86,6 +137,8 @@ export interface BatchJsonReport {
       minor: number;
     };
     passedChecks: number;
+    /** Aggregate criteria coverage across all URLs */
+    criteriaCoverage?: CriteriaCoverageSummary;
   };
   /** Coverage disclaimer */
   disclaimer: string;
@@ -144,6 +197,8 @@ export interface BatchJsonInput {
     moderateCount: number;
     minorCount: number;
   };
+  /** Include detailed criteria verifications (for admin exports) */
+  includeDetailedCriteria?: boolean;
   /** Per-URL scan results */
   urlResults: Array<{
     scanId: string;
@@ -178,6 +233,10 @@ export interface BatchJsonInput {
           };
         };
       }>;
+      /** Criteria coverage summary */
+      criteriaCoverage?: CriteriaCoverageSummary;
+      /** Detailed criteria verifications */
+      criteriaVerifications?: CriteriaVerificationExport[];
     };
   }>;
 }
@@ -245,12 +304,16 @@ function transformIssue(issue: BatchInputIssue): BatchIssueDetail {
  * Transform URL result to BatchUrlResult format
  *
  * @param urlResult - Raw URL result from input
+ * @param includeDetailedCriteria - Whether to include detailed criteria verifications
  * @returns Formatted URL result for JSON export
  */
-function transformUrlResult(urlResult: BatchJsonInput['urlResults'][0]): BatchUrlResult {
+function transformUrlResult(
+  urlResult: BatchJsonInput['urlResults'][0],
+  includeDetailedCriteria = false
+): BatchUrlResult {
   const result = urlResult.result;
 
-  return {
+  const baseResult: BatchUrlResult = {
     scanId: urlResult.scanId,
     url: urlResult.url,
     pageTitle: urlResult.pageTitle ? sanitizeText(urlResult.pageTitle) : null,
@@ -267,6 +330,18 @@ function transformUrlResult(urlResult: BatchJsonInput['urlResults'][0]): BatchUr
     },
     issues: (result?.issues ?? []).map((issue) => transformIssue(issue as BatchInputIssue)),
   };
+
+  // Add criteria coverage if available
+  if (result?.criteriaCoverage) {
+    baseResult.criteriaCoverage = result.criteriaCoverage;
+  }
+
+  // Add detailed criteria verifications for admin exports
+  if (includeDetailedCriteria && result?.criteriaVerifications) {
+    baseResult.criteriaVerifications = result.criteriaVerifications;
+  }
+
+  return baseResult;
 }
 
 /**
@@ -279,6 +354,7 @@ function calculateAggregateStats(urlResults: BatchJsonInput['urlResults']): {
   totalIssues: number;
   bySeverity: { critical: number; serious: number; moderate: number; minor: number };
   passedChecks: number;
+  criteriaCoverage?: CriteriaCoverageSummary;
 } {
   let totalIssues = 0;
   let critical = 0;
@@ -286,6 +362,15 @@ function calculateAggregateStats(urlResults: BatchJsonInput['urlResults']): {
   let moderate = 0;
   let minor = 0;
   let passedChecks = 0;
+
+  // Aggregate criteria coverage from all URLs
+  let hasCriteriaCoverage = false;
+  let totalCriteriaTotal = 0;
+  let totalCriteriaChecked = 0;
+  let totalCriteriaPassed = 0;
+  let totalCriteriaFailed = 0;
+  let totalCriteriaAiVerified = 0;
+  let totalCriteriaNotTestable = 0;
 
   for (const urlResult of urlResults) {
     if (urlResult.result) {
@@ -295,14 +380,49 @@ function calculateAggregateStats(urlResults: BatchJsonInput['urlResults']): {
       moderate += urlResult.result.moderateCount;
       minor += urlResult.result.minorCount;
       passedChecks += urlResult.result.passedChecks;
+
+      // Aggregate criteria coverage
+      if (urlResult.result.criteriaCoverage) {
+        hasCriteriaCoverage = true;
+        const coverage = urlResult.result.criteriaCoverage;
+        // For aggregate, we use max total (should be same for all URLs with same WCAG level)
+        totalCriteriaTotal = Math.max(totalCriteriaTotal, coverage.total);
+        // Sum the other values (we'll average them later)
+        totalCriteriaChecked += coverage.checked;
+        totalCriteriaPassed += coverage.passed;
+        totalCriteriaFailed += coverage.failed;
+        totalCriteriaAiVerified += coverage.aiVerified;
+        totalCriteriaNotTestable += coverage.notTestable;
+      }
     }
   }
 
-  return {
+  const result: {
+    totalIssues: number;
+    bySeverity: { critical: number; serious: number; moderate: number; minor: number };
+    passedChecks: number;
+    criteriaCoverage?: CriteriaCoverageSummary;
+  } = {
     totalIssues,
     bySeverity: { critical, serious, moderate, minor },
     passedChecks,
   };
+
+  // Calculate average criteria coverage if any URL had coverage data
+  if (hasCriteriaCoverage) {
+    const urlCount = urlResults.filter((u) => u.result?.criteriaCoverage).length;
+    result.criteriaCoverage = {
+      total: totalCriteriaTotal,
+      checked: Math.round(totalCriteriaChecked / urlCount),
+      passed: Math.round(totalCriteriaPassed / urlCount),
+      failed: Math.round(totalCriteriaFailed / urlCount),
+      aiVerified: Math.round(totalCriteriaAiVerified / urlCount),
+      notTestable: Math.round(totalCriteriaNotTestable / urlCount),
+      coveragePercentage: Math.round((totalCriteriaChecked / urlCount / totalCriteriaTotal) * 100),
+    };
+  }
+
+  return result;
 }
 
 /**
@@ -319,7 +439,10 @@ function calculateAggregateStats(urlResults: BatchJsonInput['urlResults']): {
  * ```
  */
 export function generateBatchJsonReport(input: BatchJsonInput): BatchJsonReport {
-  // Calculate aggregate stats from URL results if not provided
+  // Calculate aggregate stats from URL results (includes criteria coverage)
+  const calculatedStats = calculateAggregateStats(input.urlResults);
+
+  // Use pre-computed stats if provided, but keep criteria coverage from calculation
   const aggregateStats = input.aggregateStats
     ? {
         totalIssues: input.aggregateStats.totalIssues,
@@ -329,9 +452,10 @@ export function generateBatchJsonReport(input: BatchJsonInput): BatchJsonReport 
           moderate: input.aggregateStats.moderateCount,
           minor: input.aggregateStats.minorCount,
         },
-        passedChecks: calculateAggregateStats(input.urlResults).passedChecks,
+        passedChecks: calculatedStats.passedChecks,
+        ...(calculatedStats.criteriaCoverage && { criteriaCoverage: calculatedStats.criteriaCoverage }),
       }
-    : calculateAggregateStats(input.urlResults);
+    : calculatedStats;
 
   return {
     version: '1.0',
@@ -352,7 +476,7 @@ export function generateBatchJsonReport(input: BatchJsonInput): BatchJsonReport 
     },
     aggregate: aggregateStats,
     disclaimer: COVERAGE_DISCLAIMER,
-    urls: input.urlResults.map(transformUrlResult),
+    urls: input.urlResults.map((url) => transformUrlResult(url, input.includeDetailedCriteria)),
   };
 }
 

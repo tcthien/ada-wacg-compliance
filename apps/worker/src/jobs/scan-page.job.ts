@@ -176,6 +176,7 @@ export async function processScanPageJob(
         moderateCount: summary.moderate,
         minorCount: summary.minor,
         passedChecks: scanResult.passes,
+        passedRuleIds: scanResult.passedRuleIds ?? [], // Store passed axe-core rule IDs for criteria coverage
         inapplicableChecks: scanResult.inapplicable,
         issues: {
           create: scanResult.issues.map((issue) => ({

@@ -225,7 +225,7 @@ export function WcagLevelSelector({
         <Accordion
           type="single"
           collapsible
-          value={expandedLevel}
+          {...(expandedLevel !== undefined ? { value: expandedLevel } : {})}
           onValueChange={setExpandedLevel}
         >
           <AccordionItem value="learn-more" className="border-0">

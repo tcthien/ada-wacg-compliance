@@ -1,0 +1,83 @@
+{
+  "key": {
+    "contentHash": "8a0c2e34b512b3f2",
+    "wcagLevel": "AA",
+    "batchNumber": 0
+  },
+  "verifications": [
+    {
+      "criterionId": "1.1.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 95,
+      "reasoning": "The page contains no non-text content. There are no images (<img>), SVGs, canvas elements, videos, audio, or icon fonts present in the HTML. The page consists entirely of text content within a heading and paragraph element.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.1",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "No audio-only or video-only media content is present on this page. The page contains only text content (a literary excerpt from Moby-Dick).",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.2",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "No synchronized media (video with audio) is present on this page. The page contains only static text content.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.3",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "No time-based media content is present on this page. The page contains only text content without any video or audio elements.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.4",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "No live audio or video content is present on this page. This criterion applies only to live streaming media.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.2.5",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "No prerecorded video content is present on this page. The page contains only static text content without any video elements.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.3.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "The page uses proper semantic HTML: an <h1> element for the main heading 'Herman Melville - Moby-Dick' and a <p> element for the paragraph content. The structure and relationships are programmatically determinable through correct use of heading and paragraph elements. No tables, forms, or lists are present that would require additional markup.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.3.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 80,
+      "reasoning": "The DOM order is logical and sequential: heading followed by paragraph content. There is no evidence of CSS reordering (no flexbox order, grid placement, or absolute positioning visible). The content reads correctly in linear order as confirmed by the accessibility tree showing heading then paragraph.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.3.3",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page contains no instructions or interactive elements that could rely on sensory characteristics. It is purely literary text content without any references to shapes, colors, locations, or sounds for understanding or operating the content.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "1.3.4",
+      "status": "NOT_TESTED",
+      "confidence": 40,
+      "reasoning": "The static HTML does not contain evidence of orientation restrictions. However, verifying this criterion requires testing the page in different orientations or examining CSS/JavaScript that may restrict orientation, which cannot be fully determined from the provided HTML alone.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 6910,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:23:12.157Z",
+  "expiresAt": "2026-01-25T13:23:12.157Z"
+}

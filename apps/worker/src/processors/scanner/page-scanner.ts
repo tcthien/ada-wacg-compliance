@@ -57,6 +57,9 @@ export interface ScanResult {
   /** Number of axe-core rules that passed */
   passes: number;
 
+  /** IDs of axe-core rules that passed (for WCAG criteria mapping) */
+  passedRuleIds: string[];
+
   /** Number of axe-core rules that were inapplicable */
   inapplicable: number;
 
@@ -252,6 +255,7 @@ export async function scanPage(
       scanDuration: Date.now() - startTime,
       issues,
       passes: axeResults.passes.length,
+      passedRuleIds: axeResults.passes.map((p) => p.id),
       inapplicable: axeResults.inapplicable.length,
       timestamp: new Date(),
     };

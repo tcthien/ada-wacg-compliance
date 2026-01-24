@@ -153,6 +153,18 @@ function getAiIssuesJson(result: ScanResult): string {
 }
 
 /**
+ * Get the criteria verifications JSON for export
+ * @param result The scan result
+ * @returns JSON string for ai_criteria_verifications_json column, or undefined if none
+ */
+function getCriteriaVerificationsJson(result: ScanResult): string | undefined {
+  if (result.criteriaVerifications && result.criteriaVerifications.length > 0) {
+    return JSON.stringify(result.criteriaVerifications);
+  }
+  return undefined;
+}
+
+/**
  * Transform scan results to CSV import format
  * Matches the API schema at /api/v1/admin/ai-queue/import
  * @param results Array of scan results
@@ -165,14 +177,25 @@ export function transformToImportFormat(results: ScanResult[]): ImportRow[] {
       ? Math.ceil(result.durationMs / 1000)
       : 60; // Default to 60 seconds if not tracked
 
-    return {
+    // Use actual token count if available, otherwise estimate
+    const tokensUsed = result.tokensUsed ?? estimateTokensUsed(result);
+
+    const row: ImportRow = {
       scan_id: result.scanId,
       ai_summary: formatSummary(result.summary),
       ai_remediation_plan: formatRemediationPlan(result.remediationPlan),
       ai_issues_json: getAiIssuesJson(result),
-      tokens_used: estimateTokensUsed(result),
+      tokens_used: tokensUsed,
       ai_model: 'claude-opus-4-5-20251101',
       processing_time: processingTimeSeconds,
     };
+
+    // Add criteria verifications if present
+    const criteriaVerificationsJson = getCriteriaVerificationsJson(result);
+    if (criteriaVerificationsJson) {
+      row.ai_criteria_verifications_json = criteriaVerificationsJson;
+    }
+
+    return row;
   });
 }

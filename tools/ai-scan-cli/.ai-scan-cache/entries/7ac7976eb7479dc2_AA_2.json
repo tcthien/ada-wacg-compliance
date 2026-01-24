@@ -1,0 +1,83 @@
+{
+  "key": {
+    "contentHash": "7ac7976eb7479dc2",
+    "wcagLevel": "AA",
+    "batchNumber": 2
+  },
+  "verifications": [
+    {
+      "criterionId": "2.1.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 65,
+      "reasoning": "All interactive elements visible in the accessibility tree are standard HTML elements (links, buttons, combobox/select) that are inherently keyboard accessible. The links use proper anchor elements with href attributes, buttons are native button elements, and the schemes dropdown is a native select element. No evidence of mouse-only event handlers or custom controls that would require keyboard alternatives.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.1.2",
+      "status": "NOT_TESTED",
+      "confidence": 30,
+      "reasoning": "No modal dialogs, embedded content, or complex widgets that could trap keyboard focus are evident in the static HTML. However, verifying that focus can be moved away from all elements requires interactive keyboard testing that cannot be performed from static content analysis alone.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.1.4",
+      "status": "NOT_TESTED",
+      "confidence": 35,
+      "reasoning": "No accesskey attributes are present in the HTML. However, the Swagger UI JavaScript may implement keyboard shortcuts that cannot be detected from static HTML analysis. The spec.json and SwaggerUIBundle initialization could potentially add single-character shortcuts that require interactive testing to verify.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.2.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 75,
+      "reasoning": "No time limits, session timeouts, auto-refreshing meta tags, countdown timers, or auto-advancing content are present in the HTML. The page is a static API documentation interface without time-dependent functionality.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.2.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 80,
+      "reasoning": "No auto-playing carousels, animated banners, scrolling tickers, auto-updating content, or moving/blinking elements are detected in the HTML. The only animation present is CSS-based hover effects on the GitHub corner SVG which does not auto-play or continuously animate.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.3.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "No flashing or strobing content is present. There are no videos, rapidly animating GIFs, or JavaScript-driven flash effects. The page contains static content with CSS styling and no elements that flash more than three times per second.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.1",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 80,
+      "reasoning": "No skip navigation link is present at the beginning of the page. The first focusable element is the GitHub corner link. While ARIA landmarks could provide bypass mechanisms, no role='main', role='navigation', or other landmark roles are explicitly defined in the HTML. The heading structure exists but there is no skip link to bypass the repeated navigation sections.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "The page has a <title> element with value 'httpbin.org' which describes the topic of the page - it's the httpbin.org API testing service. While minimal, it adequately identifies the site and page purpose.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.3",
+      "status": "NOT_TESTED",
+      "confidence": 40,
+      "reasoning": "Verifying focus order requires interactive keyboard navigation testing. The HTML structure appears logical with content flowing from header information to API sections to footer, and no positive tabindex values are present that would disrupt natural tab order. However, actual focus order cannot be confirmed without interactive testing.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.4",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 75,
+      "reasoning": "All links have descriptive text that indicates their purpose: 'View source on Github' (with aria-label), 'the developer - Website', 'Send email to the developer', 'Flasgger', 'HTML form', and category links like 'HTTP Methods', 'Auth', 'Status codes', etc. Each link text clearly describes the destination or action. The 'HTML form' link has additional context in its list item ('that posts to /post').",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 12245,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:41:24.515Z",
+  "expiresAt": "2026-01-25T13:41:24.515Z"
+}

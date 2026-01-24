@@ -17,6 +17,19 @@ export interface FeatureFlags {
    * Default: false (use legacy discovery flow)
    */
   discoveryV2Enabled: boolean;
+
+  /**
+   * Enable WCAG Criteria Coverage Table
+   *
+   * When enabled, scan result pages will show:
+   * - Tabbed interface with Issues and Criteria Coverage tabs
+   * - Complete WCAG criteria table with verification status
+   * - Scanner source attribution (axe-core, AI, N/A)
+   * - Click-through from failed criteria to related issues
+   *
+   * Default: true (enabled by default for new feature)
+   */
+  criteriaCoverageEnabled: boolean;
 }
 
 /**
@@ -56,6 +69,10 @@ export function useFeatureFlags(): FeatureFlags {
       process.env.NEXT_PUBLIC_DISCOVERY_V2_ENABLED,
       false
     ),
+    criteriaCoverageEnabled: parseEnvBoolean(
+      process.env.NEXT_PUBLIC_CRITERIA_COVERAGE_ENABLED,
+      true // Enabled by default
+    ),
   };
 }
 
@@ -69,6 +86,10 @@ export function getFeatureFlags(): FeatureFlags {
     discoveryV2Enabled: parseEnvBoolean(
       process.env.NEXT_PUBLIC_DISCOVERY_V2_ENABLED,
       false
+    ),
+    criteriaCoverageEnabled: parseEnvBoolean(
+      process.env.NEXT_PUBLIC_CRITERIA_COVERAGE_ENABLED,
+      true // Enabled by default
     ),
   };
 }

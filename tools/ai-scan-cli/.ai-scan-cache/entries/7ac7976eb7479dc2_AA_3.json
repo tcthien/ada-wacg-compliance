@@ -1,0 +1,83 @@
+{
+  "key": {
+    "contentHash": "7ac7976eb7479dc2",
+    "wcagLevel": "AA",
+    "batchNumber": 3
+  },
+  "verifications": [
+    {
+      "criterionId": "2.4.5",
+      "status": "AI_VERIFIED_FAIL",
+      "confidence": 65,
+      "reasoning": "The page provides navigation through section headings with anchor links (#/HTTP Methods, #/Auth, etc.) as a form of table of contents, but lacks a site search functionality, sitemap, or breadcrumb navigation. For a standalone utility page this may be acceptable, but only one navigation method (section links) is clearly present. No search or alternative navigation mechanisms were found.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.6",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 80,
+      "reasoning": "Headings describe their content appropriately: 'httpbin.org' as the main title, 'HTTP Methods', 'Auth', 'Status codes', 'Request inspection', 'Response inspection', 'Response formats', 'Dynamic data', 'Cookies', 'Images', 'Redirects', 'Anything', and 'Other Utilities' all clearly describe the sections they head. Each category heading includes a descriptive subtitle explaining its purpose.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.4.7",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "Focus visibility requires keyboard interaction testing to verify focus indicators are visible when tabbing through interactive elements. Static HTML analysis cannot determine if CSS removes focus outlines or if custom focus styles are sufficient. The HTML does not show 'outline: none' in the embedded styles, but external CSS may affect focus visibility.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 70,
+      "reasoning": "The page is a Swagger UI documentation interface with expandable sections. Interactive elements are buttons and links that can be operated with single pointer clicks. No evidence of multipoint gestures (pinch-to-zoom) or path-based gestures (swipe navigation) required for core functionality. The 'Expand operation' buttons provide single-click alternatives.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.2",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "Pointer cancellation behavior requires interactive testing to verify whether actions trigger on mouse-up vs mouse-down and whether moving the pointer away cancels the action. Static HTML analysis cannot determine JavaScript event binding behavior.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.3",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 85,
+      "reasoning": "The GitHub corner link has aria-label='View source on Github' which matches its visual purpose. Buttons labeled 'Expand operation' have title='Expand operation' matching their function. Links like 'the developer - Website' and 'Send email to the developer' have visible text that serves as their accessible name. No aria-labels that contradict visible text were found.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "2.5.4",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 75,
+      "reasoning": "The page is a static API documentation interface with no evidence of motion-based controls (shake, tilt, device orientation gestures). All functionality appears to be operable through standard pointer/keyboard interactions without requiring device motion.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.1.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 95,
+      "reasoning": "The <html> element has lang='en' attribute, which is a valid BCP 47 language tag for English. The page content is in English, matching the declared language. This satisfies the requirement for programmatically determined page language.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.1.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 80,
+      "reasoning": "The page content is entirely in English with no foreign language passages that would require lang attributes. Technical terms like 'HTTP', 'API', 'JSON' are universal technical vocabulary that don't require language marking. No multilingual content requiring lang attribute marking was identified.",
+      "relatedIssueIds": []
+    },
+    {
+      "criterionId": "3.2.1",
+      "status": "NOT_TESTED",
+      "confidence": 0,
+      "reasoning": "On Focus behavior requires interactive testing to verify that focusing on elements (via Tab key) does not trigger context changes like form submission, navigation, or popups. Static HTML analysis cannot determine JavaScript onfocus event handlers or their effects.",
+      "relatedIssueIds": []
+    }
+  ],
+  "tokensUsed": 12008,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T13:42:02.194Z",
+  "expiresAt": "2026-01-25T13:42:02.194Z"
+}

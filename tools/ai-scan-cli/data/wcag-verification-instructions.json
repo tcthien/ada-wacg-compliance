@@ -1,0 +1,1456 @@
+{
+  "version": "2.1",
+  "lastUpdated": "2026-01-18",
+  "description": "WCAG 2.1 verification instructions for AI-powered accessibility analysis",
+  "criteria": {
+    "1.1.1": {
+      "criterionId": "1.1.1",
+      "title": "Non-text Content",
+      "level": "A",
+      "description": "All non-text content that is presented to the user has a text alternative that serves the equivalent purpose",
+      "whatToCheck": [
+        "Check all <img> elements for alt attributes with meaningful descriptions",
+        "Check <svg> elements for accessible names (title, aria-label, or aria-labelledby)",
+        "Check <canvas> elements for fallback content or aria-label",
+        "Check <video> and <audio> elements for text alternatives or descriptions",
+        "Check CSS background images used to convey information have text alternatives",
+        "Check icon fonts and emoji have accessible text alternatives",
+        "Check <object> and <embed> elements for alternative content",
+        "Check image maps (<map>, <area>) for alt text on each area",
+        "Verify decorative images use empty alt=\"\" or role=\"presentation\""
+      ],
+      "passCondition": "All informative images have descriptive alt text that conveys the same information. Decorative images use alt=\"\" or role=\"presentation\". Complex images have extended descriptions. All media has appropriate text alternatives.",
+      "failIndicators": [
+        "Missing alt attribute on <img> elements",
+        "Empty alt attribute on informative images",
+        "Alt text that says 'image', 'photo', 'picture', or filename",
+        "Alt text that doesn't describe the image content or purpose",
+        "Missing accessible names on SVG, canvas, or icon elements",
+        "Informative CSS background images without text alternatives",
+        "CAPTCHAs without audio or other alternatives"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect missing alt attributes",
+        "Detect empty alt on linked images",
+        "Detect suspicious alt text patterns (filenames, 'image of')",
+        "Detect missing ARIA labels on interactive elements"
+      ]
+    },
+    "1.2.1": {
+      "criterionId": "1.2.1",
+      "title": "Audio-only and Video-only (Prerecorded)",
+      "level": "A",
+      "description": "For prerecorded audio-only and prerecorded video-only media, an alternative is provided",
+      "whatToCheck": [
+        "Check for text transcripts near audio-only content (podcasts, audio recordings)",
+        "Check for audio descriptions or text descriptions of video-only content (silent videos, animations)",
+        "Verify transcripts are accurate and complete",
+        "Check that alternatives are clearly labeled and easy to find"
+      ],
+      "passCondition": "Audio-only content has a text transcript. Video-only content has either an audio track description or a text description of the visual content.",
+      "failIndicators": [
+        "Audio files without accompanying transcripts",
+        "Silent videos or animations without text descriptions",
+        "Transcripts that are incomplete or inaccurate",
+        "Alternative content that is hidden or difficult to find"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect presence of <audio> elements",
+        "Detect presence of video elements without audio tracks",
+        "Check for nearby transcript links or text content"
+      ]
+    },
+    "1.2.2": {
+      "criterionId": "1.2.2",
+      "title": "Captions (Prerecorded)",
+      "level": "A",
+      "description": "Captions are provided for all prerecorded audio content in synchronized media",
+      "whatToCheck": [
+        "Check that all <video> elements with audio have captions",
+        "Verify captions are synchronized with the audio",
+        "Check caption accuracy (speaker identification, sound effects, music)",
+        "Verify captions are in the same language as the audio",
+        "Check for <track> elements with kind=\"captions\" or kind=\"subtitles\"",
+        "Check embedded videos (YouTube, Vimeo) for caption availability"
+      ],
+      "passCondition": "All videos with audio content have accurate, synchronized captions that include dialogue, speaker identification, and relevant sound effects.",
+      "failIndicators": [
+        "Videos with audio but no captions",
+        "Auto-generated captions without review",
+        "Captions that are out of sync with audio",
+        "Missing speaker identification in multi-speaker content",
+        "Captions that omit important audio information"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect <video> elements",
+        "Check for <track> elements with caption-related kinds",
+        "Detect embedded video players"
+      ]
+    },
+    "1.2.3": {
+      "criterionId": "1.2.3",
+      "title": "Audio Description or Media Alternative (Prerecorded)",
+      "level": "A",
+      "description": "An alternative for time-based media or audio description of the prerecorded video content is provided",
+      "whatToCheck": [
+        "Check for audio descriptions that describe visual content",
+        "Check for full text transcripts that describe both audio and visual content",
+        "Verify audio descriptions include key visual information",
+        "Check for links to media alternative or audio description versions"
+      ],
+      "passCondition": "Videos have either audio descriptions of visual content or a complete text alternative that describes both the audio and visual content.",
+      "failIndicators": [
+        "Videos with important visual information not conveyed in audio",
+        "No audio description track available",
+        "No text alternative for video content",
+        "Audio descriptions that miss key visual elements"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect <video> elements",
+        "Check for <track> elements with kind=\"descriptions\"",
+        "Check for nearby transcript links"
+      ]
+    },
+    "1.2.4": {
+      "criterionId": "1.2.4",
+      "title": "Captions (Live)",
+      "level": "AA",
+      "description": "Captions are provided for all live audio content in synchronized media",
+      "whatToCheck": [
+        "Check if live video/audio streams have real-time captions",
+        "Verify live captioning service is integrated",
+        "Check for CART (Communication Access Real-time Translation) services",
+        "Verify caption quality and accuracy for live content"
+      ],
+      "passCondition": "Live audio content in synchronized media is accompanied by real-time captions.",
+      "failIndicators": [
+        "Live streams without caption support",
+        "Delayed captions that significantly lag behind audio",
+        "Low-quality live captions with many errors",
+        "No mechanism for live captioning"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect live streaming elements",
+        "Check for caption-related attributes or players"
+      ]
+    },
+    "1.2.5": {
+      "criterionId": "1.2.5",
+      "title": "Audio Description (Prerecorded)",
+      "level": "AA",
+      "description": "Audio description is provided for all prerecorded video content in synchronized media",
+      "whatToCheck": [
+        "Check for audio description tracks on all videos",
+        "Verify audio descriptions adequately describe visual content",
+        "Check that audio descriptions don't overlap with dialogue",
+        "Verify audio description toggle or separate version is available"
+      ],
+      "passCondition": "All prerecorded video content has an audio description track that describes important visual content not conveyed through the main audio track.",
+      "failIndicators": [
+        "Videos without audio description tracks",
+        "Audio descriptions that miss important visual information",
+        "No mechanism to enable audio descriptions",
+        "Audio descriptions that interfere with dialogue"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect <video> elements",
+        "Check for <track> elements with kind=\"descriptions\"",
+        "Check for audio description controls"
+      ]
+    },
+    "1.3.1": {
+      "criterionId": "1.3.1",
+      "title": "Info and Relationships",
+      "level": "A",
+      "description": "Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text",
+      "whatToCheck": [
+        "Check that headings use proper <h1>-<h6> elements in logical order",
+        "Check that lists use <ul>, <ol>, or <dl> elements appropriately",
+        "Check that data tables have proper <th>, scope, and headers attributes",
+        "Check that form labels are properly associated using <label> or aria-labelledby",
+        "Check for proper use of landmark regions (header, nav, main, footer)",
+        "Check that visual groupings are conveyed programmatically (fieldset/legend)",
+        "Verify ARIA roles and attributes are used correctly",
+        "Check that emphasized text uses <strong>, <em>, or ARIA",
+        "Check that quotes use <blockquote> or <q> elements"
+      ],
+      "passCondition": "All structural relationships (headings, lists, tables, forms) are conveyed through proper semantic HTML or ARIA. Visual formatting has programmatic equivalents.",
+      "failIndicators": [
+        "Headings created with CSS styling instead of heading elements",
+        "Lists created with line breaks instead of list elements",
+        "Data tables without proper header associations",
+        "Form inputs without associated labels",
+        "Missing landmark regions",
+        "Fake tables using CSS Grid/Flexbox for tabular data",
+        "Visual-only emphasis (bold/italic) without semantic markup"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect heading hierarchy issues",
+        "Detect form label associations",
+        "Detect table header associations",
+        "Detect landmark region presence",
+        "Detect improper ARIA usage"
+      ]
+    },
+    "1.3.2": {
+      "criterionId": "1.3.2",
+      "title": "Meaningful Sequence",
+      "level": "A",
+      "description": "When the sequence in which content is presented affects its meaning, a correct reading sequence can be programmatically determined",
+      "whatToCheck": [
+        "Check that DOM order matches visual presentation order",
+        "Check that CSS does not create a misleading reading order",
+        "Verify content makes sense when read linearly",
+        "Check that tabindex doesn't create confusing navigation order",
+        "Verify multi-column layouts read in correct sequence",
+        "Check that positioned content maintains logical order"
+      ],
+      "passCondition": "The DOM order of content matches the intended reading sequence. Content makes sense when CSS is disabled or when read by a screen reader.",
+      "failIndicators": [
+        "CSS flexbox/grid reordering that breaks logical sequence",
+        "Positioned elements that appear in wrong reading order",
+        "tabindex values that create illogical focus order",
+        "Content that doesn't make sense when linearized",
+        "Float layouts that break reading sequence"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect CSS order/flex-direction that may affect sequence",
+        "Detect positive tabindex values",
+        "Compare visual vs DOM order (limited)"
+      ]
+    },
+    "1.3.3": {
+      "criterionId": "1.3.3",
+      "title": "Sensory Characteristics",
+      "level": "A",
+      "description": "Instructions provided for understanding and operating content do not rely solely on sensory characteristics such as shape, color, size, visual location, orientation, or sound",
+      "whatToCheck": [
+        "Check that instructions don't rely solely on shape (the round button)",
+        "Check that instructions don't rely solely on color (click the red link)",
+        "Check that instructions don't rely solely on location (the menu on the right)",
+        "Check that instructions don't rely solely on sound (when you hear a beep)",
+        "Verify additional text or cues supplement sensory references",
+        "Check error messages and help text for sensory-only references"
+      ],
+      "passCondition": "All instructions include text labels or other non-sensory identifying information in addition to any sensory characteristics mentioned.",
+      "failIndicators": [
+        "Instructions like 'click the green button' without text label",
+        "References to 'the sidebar on the left' without other identification",
+        "Instructions based solely on icons without text",
+        "Sound-only indicators without visual equivalents",
+        "Instructions referencing shape without text labels"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect text patterns referencing colors",
+        "Detect text patterns referencing positions",
+        "Detect text patterns referencing shapes"
+      ]
+    },
+    "1.3.4": {
+      "criterionId": "1.3.4",
+      "title": "Orientation",
+      "level": "AA",
+      "description": "Content does not restrict its view and operation to a single display orientation unless a specific display orientation is essential",
+      "whatToCheck": [
+        "Check that content works in both portrait and landscape orientations",
+        "Verify no CSS/JavaScript locks orientation unnecessarily",
+        "Check for orientation media queries that might restrict content",
+        "Verify essential orientation restrictions are documented"
+      ],
+      "passCondition": "Content displays and functions properly in both portrait and landscape orientations, unless a specific orientation is essential for the content (e.g., a piano keyboard app).",
+      "failIndicators": [
+        "Content only available in one orientation",
+        "JavaScript that forces orientation",
+        "CSS that hides content in certain orientations",
+        "Prompts telling users to rotate their device (unless essential)"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect CSS orientation media queries",
+        "Detect JavaScript orientation lock APIs",
+        "Check for orientation-specific styling"
+      ]
+    },
+    "1.3.5": {
+      "criterionId": "1.3.5",
+      "title": "Identify Input Purpose",
+      "level": "AA",
+      "description": "The purpose of each input field collecting information about the user can be programmatically determined when the input field serves a common purpose",
+      "whatToCheck": [
+        "Check that form inputs have appropriate autocomplete attributes",
+        "Verify autocomplete values match the intended input purpose",
+        "Check common fields: name, email, phone, address, payment info",
+        "Verify autocomplete is not disabled on user-related fields"
+      ],
+      "passCondition": "Form inputs that collect user information (name, email, phone, address, etc.) have appropriate autocomplete attributes that identify their purpose.",
+      "failIndicators": [
+        "Missing autocomplete attributes on common input fields",
+        "Incorrect autocomplete values",
+        "autocomplete='off' on fields that should support autofill",
+        "Custom inputs without proper input purpose identification"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect input fields that should have autocomplete",
+        "Validate autocomplete attribute values",
+        "Check for missing autocomplete on common field types"
+      ]
+    },
+    "1.4.1": {
+      "criterionId": "1.4.1",
+      "title": "Use of Color",
+      "level": "A",
+      "description": "Color is not used as the only visual means of conveying information, indicating an action, prompting a response, or distinguishing a visual element",
+      "whatToCheck": [
+        "Check that links are distinguishable without color (underline, icon)",
+        "Check that required fields have non-color indicators (asterisk, text)",
+        "Check that error states have non-color indicators (icon, text, border)",
+        "Check that chart/graph data is distinguishable without color (patterns, labels)",
+        "Verify form validation doesn't rely solely on color",
+        "Check that status indicators use more than just color"
+      ],
+      "passCondition": "All information conveyed through color is also available through other visual means such as text, patterns, shapes, or additional formatting.",
+      "failIndicators": [
+        "Links only distinguishable by color",
+        "Required fields marked only with color",
+        "Errors indicated only by red color",
+        "Charts/graphs with color-only data distinction",
+        "Status indicators using only color (red/green lights)",
+        "Form field validation using only color changes"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect links without underlines",
+        "Check link color contrast with surrounding text",
+        "Detect form validation patterns"
+      ]
+    },
+    "1.4.2": {
+      "criterionId": "1.4.2",
+      "title": "Audio Control",
+      "level": "A",
+      "description": "If any audio on a Web page plays automatically for more than 3 seconds, either a mechanism is available to pause or stop the audio, or a mechanism is available to control audio volume independently from the overall system volume level",
+      "whatToCheck": [
+        "Check for audio/video that plays automatically on page load",
+        "Verify auto-playing media has pause/stop controls",
+        "Check for volume control independent of system volume",
+        "Verify audio can be muted easily",
+        "Check embedded media players for accessible controls"
+      ],
+      "passCondition": "Auto-playing audio either stops within 3 seconds, or provides easy-to-find controls to pause, stop, or adjust volume.",
+      "failIndicators": [
+        "Auto-playing audio/video without controls",
+        "Background music that cannot be stopped",
+        "Audio controls that are hard to find",
+        "No mechanism to mute or pause audio",
+        "Audio that restarts after being paused"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect autoplay attribute on audio/video",
+        "Detect audio/video elements",
+        "Check for controls attribute presence"
+      ]
+    },
+    "1.4.3": {
+      "criterionId": "1.4.3",
+      "title": "Contrast (Minimum)",
+      "level": "AA",
+      "description": "The visual presentation of text and images of text has a contrast ratio of at least 4.5:1, except for large text (3:1), incidental text, or logotypes",
+      "whatToCheck": [
+        "Check text color contrast against background (minimum 4.5:1)",
+        "Check large text contrast (minimum 3:1 for 18pt+ or 14pt+ bold)",
+        "Check text over images or gradients",
+        "Verify placeholder text meets contrast requirements",
+        "Check link text contrast",
+        "Check disabled state text (incidental exception)",
+        "Check text in form inputs"
+      ],
+      "passCondition": "Normal text has at least 4.5:1 contrast ratio. Large text (18pt or 14pt bold) has at least 3:1 contrast ratio. Incidental text and logotypes are exempt.",
+      "failIndicators": [
+        "Text with less than 4.5:1 contrast ratio",
+        "Large text with less than 3:1 contrast ratio",
+        "Low contrast placeholder text",
+        "Text over images without sufficient contrast",
+        "Light gray text on white backgrounds"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Calculate text contrast ratios",
+        "Identify large vs normal text",
+        "Check placeholder text contrast",
+        "Check link text contrast"
+      ]
+    },
+    "1.4.4": {
+      "criterionId": "1.4.4",
+      "title": "Resize Text",
+      "level": "AA",
+      "description": "Except for captions and images of text, text can be resized without assistive technology up to 200 percent without loss of content or functionality",
+      "whatToCheck": [
+        "Test page at 200% browser zoom",
+        "Verify no text is cut off or overlapping",
+        "Verify no horizontal scrolling is required at 200%",
+        "Check that interactive elements remain functional",
+        "Verify text doesn't overflow containers",
+        "Check that menus and navigation remain usable"
+      ],
+      "passCondition": "When text is resized to 200% using browser zoom, all content remains readable without horizontal scrolling, and all functionality remains available.",
+      "failIndicators": [
+        "Text truncated or hidden at 200% zoom",
+        "Content overlapping at larger text sizes",
+        "Horizontal scrollbar required at 200% zoom",
+        "Interactive elements becoming inaccessible",
+        "Fixed-size containers cutting off text",
+        "Loss of functionality at 200% zoom"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect fixed-size text containers",
+        "Detect px-based font sizes",
+        "Check for viewport meta restrictions"
+      ]
+    },
+    "1.4.5": {
+      "criterionId": "1.4.5",
+      "title": "Images of Text",
+      "level": "AA",
+      "description": "If the technologies being used can achieve the visual presentation, text is used to convey information rather than images of text, except where essential or customizable",
+      "whatToCheck": [
+        "Check for text rendered as images",
+        "Verify logos and essential images of text are acceptable",
+        "Check for customizable images of text (user can adjust)",
+        "Look for images containing significant amounts of text",
+        "Check promotional banners and graphics for text content"
+      ],
+      "passCondition": "Real text is used instead of images of text, except for logotypes or where the specific visual presentation is essential and cannot be achieved with CSS.",
+      "failIndicators": [
+        "Navigation or buttons rendered as images",
+        "Body text content as images",
+        "Headers or titles as images (unless logotype)",
+        "Images of text that could be rendered with CSS",
+        "Screenshots of text used as content"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect images with long alt text (possible text image)",
+        "OCR detection of text in images",
+        "Detect image file sizes suggesting text content"
+      ]
+    },
+    "1.4.10": {
+      "criterionId": "1.4.10",
+      "title": "Reflow",
+      "level": "AA",
+      "description": "Content can be presented without loss of information or functionality, and without requiring scrolling in two dimensions for: vertical scrolling content at a width of 320 CSS pixels, horizontal scrolling content at a height of 256 CSS pixels",
+      "whatToCheck": [
+        "Test content at 320px width (400% zoom equivalent)",
+        "Verify no horizontal scrolling required for vertical content",
+        "Check that all content remains accessible",
+        "Verify data tables, images, and videos handle reflow appropriately",
+        "Check that toolbars and menus adapt to narrow widths"
+      ],
+      "passCondition": "At 320 CSS pixels width, content reflows to a single column without horizontal scrolling, and all information and functionality is preserved. Two-dimensional content (data tables, maps) may scroll horizontally.",
+      "failIndicators": [
+        "Horizontal scrollbar at narrow widths",
+        "Content cut off at 320px width",
+        "Overlapping content at narrow widths",
+        "Fixed-width layouts that don't adapt",
+        "Loss of functionality on narrow screens",
+        "Text that requires horizontal scrolling"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Check for fixed-width layouts",
+        "Detect horizontal overflow",
+        "Check for responsive breakpoints"
+      ]
+    },
+    "1.4.11": {
+      "criterionId": "1.4.11",
+      "title": "Non-text Contrast",
+      "level": "AA",
+      "description": "The visual presentation of UI components and graphical objects have a contrast ratio of at least 3:1 against adjacent colors",
+      "whatToCheck": [
+        "Check form input borders have 3:1 contrast",
+        "Check button borders/backgrounds have 3:1 contrast",
+        "Check focus indicators have 3:1 contrast",
+        "Check icons used to convey information have 3:1 contrast",
+        "Check chart/graph elements have 3:1 contrast",
+        "Check custom controls (sliders, switches) have 3:1 contrast"
+      ],
+      "passCondition": "All UI components (form fields, buttons, checkboxes) and meaningful graphical elements have at least 3:1 contrast ratio against their background.",
+      "failIndicators": [
+        "Form inputs with low contrast borders",
+        "Buttons with insufficient contrast",
+        "Icons with less than 3:1 contrast",
+        "Focus indicators with low contrast",
+        "Chart elements indistinguishable from background",
+        "Custom controls with insufficient contrast"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Check border contrast on form controls",
+        "Check button contrast",
+        "Check icon contrast",
+        "Check focus indicator contrast"
+      ]
+    },
+    "1.4.12": {
+      "criterionId": "1.4.12",
+      "title": "Text Spacing",
+      "level": "AA",
+      "description": "No loss of content or functionality occurs when adjusting line height to 1.5x font size, paragraph spacing to 2x font size, letter spacing to 0.12x font size, and word spacing to 0.16x font size",
+      "whatToCheck": [
+        "Test with line-height: 1.5",
+        "Test with paragraph spacing (margin-bottom: 2em)",
+        "Test with letter-spacing: 0.12em",
+        "Test with word-spacing: 0.16em",
+        "Verify no text is cut off or hidden",
+        "Verify no overlap or collision of elements"
+      ],
+      "passCondition": "When text spacing properties are adjusted to WCAG values, all content remains visible and functional without clipping, overlapping, or loss of information.",
+      "failIndicators": [
+        "Text cut off when spacing increased",
+        "Content overlapping with increased spacing",
+        "Buttons or containers breaking with spacing changes",
+        "Loss of functionality due to layout issues",
+        "Hidden overflow cutting off text"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect fixed-height containers",
+        "Detect overflow:hidden that may clip text",
+        "Test layout with injected spacing styles"
+      ]
+    },
+    "1.4.13": {
+      "criterionId": "1.4.13",
+      "title": "Content on Hover or Focus",
+      "level": "AA",
+      "description": "Where receiving and then removing pointer hover or keyboard focus triggers additional content to become visible and then hidden, the additional content is dismissible, hoverable, and persistent",
+      "whatToCheck": [
+        "Check tooltips can be dismissed without moving pointer/focus",
+        "Check hover content can be hovered without disappearing",
+        "Check hover/focus content persists until dismissed or trigger loses focus",
+        "Verify Escape key dismisses hover content",
+        "Check that hover content doesn't obscure trigger or other content"
+      ],
+      "passCondition": "Additional content triggered by hover or focus: (1) can be dismissed without moving pointer or focus (e.g., Escape key), (2) can be hovered over without disappearing, and (3) persists until dismissed by user action.",
+      "failIndicators": [
+        "Tooltips that disappear when trying to read them",
+        "Hover content that cannot be dismissed",
+        "Content that disappears immediately when hover/focus lost",
+        "No way to dismiss popup content via keyboard",
+        "Hover content that covers other important content"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect elements with :hover/:focus content changes",
+        "Detect tooltip patterns",
+        "Check for Escape key handlers"
+      ]
+    },
+    "2.1.1": {
+      "criterionId": "2.1.1",
+      "title": "Keyboard",
+      "level": "A",
+      "description": "All functionality of the content is operable through a keyboard interface without requiring specific timings for individual keystrokes",
+      "whatToCheck": [
+        "Check that all interactive elements (links, buttons, form fields) are keyboard accessible",
+        "Verify all custom controls and widgets can be operated with keyboard",
+        "Check that drag-and-drop operations have keyboard alternatives",
+        "Verify hover-activated content can be accessed via keyboard focus",
+        "Check that onclick handlers on non-interactive elements have keyboard equivalents",
+        "Verify custom JavaScript widgets support Tab, Enter, Space, and Arrow keys appropriately",
+        "Check that all menu items, tabs, and accordions are keyboard operable",
+        "Verify sliders, date pickers, and other complex widgets support keyboard input"
+      ],
+      "passCondition": "All interactive content can be accessed and operated using only the keyboard (Tab, Enter, Space, Arrow keys, Escape). No functionality is mouse-only.",
+      "failIndicators": [
+        "Elements only activated by mouse click without keyboard support",
+        "Custom controls that cannot receive keyboard focus",
+        "onclick handlers without onkeypress/onkeydown equivalents",
+        "Drag-and-drop without keyboard alternative",
+        "Mouse-over menus without keyboard access",
+        "Sliders or carousels that only respond to mouse input",
+        "Modal dialogs that cannot be navigated with keyboard"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect onclick handlers on non-focusable elements",
+        "Check for tabindex on custom interactive elements",
+        "Detect mouseenter/mouseover without focus equivalents",
+        "Check scrollable regions for keyboard accessibility"
+      ]
+    },
+    "2.1.2": {
+      "criterionId": "2.1.2",
+      "title": "No Keyboard Trap",
+      "level": "A",
+      "description": "If keyboard focus can be moved to a component using a keyboard interface, then focus can be moved away from that component using only a keyboard interface",
+      "whatToCheck": [
+        "Check that focus can be moved away from all focused elements using Tab or Shift+Tab",
+        "Verify modal dialogs allow focus to escape (via close button or Escape key)",
+        "Check that embedded content (iframes, plugins) doesn't trap keyboard focus",
+        "Verify custom widgets don't require mouse to exit focus",
+        "Check that date pickers, autocomplete, and dropdowns allow keyboard escape",
+        "Verify that tabindex values don't create focus traps"
+      ],
+      "passCondition": "Users can navigate away from any focused component using standard keyboard navigation (Tab, Shift+Tab, Escape). If special keys are needed, users are informed.",
+      "failIndicators": [
+        "Focus trapped inside modal without Escape key support",
+        "Embedded content (Flash, iframes) that traps focus",
+        "Custom widgets requiring mouse to exit",
+        "Infinite Tab loops within a component",
+        "Video players or media controls trapping focus",
+        "Rich text editors or code editors trapping focus"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect iframes and embedded content",
+        "Check for tabindex patterns that might trap focus",
+        "Detect modal dialogs and check for Escape key handlers",
+        "Check for focus management in custom widgets"
+      ]
+    },
+    "2.1.4": {
+      "criterionId": "2.1.4",
+      "title": "Character Key Shortcuts",
+      "level": "A",
+      "description": "If a keyboard shortcut using only letter, punctuation, number, or symbol characters is implemented, then a mechanism is available to turn off or remap the shortcut",
+      "whatToCheck": [
+        "Identify any single-character keyboard shortcuts on the page",
+        "Check if shortcuts can be turned off or disabled",
+        "Check if shortcuts can be remapped to include modifier keys",
+        "Verify shortcuts are only active when relevant component has focus",
+        "Check for accesskey attributes using single characters"
+      ],
+      "passCondition": "Single-character keyboard shortcuts can be turned off, remapped to use modifier keys (Ctrl, Alt, Shift), or are only active when the component has focus.",
+      "failIndicators": [
+        "Single-key shortcuts that cannot be disabled",
+        "Single-key shortcuts that cannot be remapped",
+        "Shortcuts that activate regardless of focus location",
+        "accesskey attributes that conflict with assistive technology",
+        "Global keyboard shortcuts using only letters or numbers"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect accesskey attributes",
+        "Detect keydown/keypress handlers listening for single characters",
+        "Check for keyboard shortcut configuration options"
+      ]
+    },
+    "2.2.1": {
+      "criterionId": "2.2.1",
+      "title": "Timing Adjustable",
+      "level": "A",
+      "description": "For each time limit set by the content, the user can turn off, adjust, or extend the time limit",
+      "whatToCheck": [
+        "Identify any session timeouts or auto-logout functionality",
+        "Check for countdown timers on forms or quizzes",
+        "Verify time-limited content provides options to extend time",
+        "Check for auto-advancing carousels or slideshows with timing",
+        "Verify meta refresh tags don't redirect before user can read content",
+        "Check for auction or real-time activity exceptions (if applicable)"
+      ],
+      "passCondition": "Users can turn off, adjust, or extend time limits before expiration. Exceptions exist for real-time events, essential activities, and limits longer than 20 hours.",
+      "failIndicators": [
+        "Session timeout without warning or extension option",
+        "Timed quizzes or forms without time extension",
+        "Auto-submitting forms without user control",
+        "Meta refresh redirects without user control",
+        "Auto-advancing content without pause option",
+        "Insufficient time warning before timeout"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect meta refresh tags",
+        "Detect setTimeout/setInterval patterns",
+        "Check for session timeout indicators",
+        "Detect auto-advancing carousel patterns"
+      ]
+    },
+    "2.2.2": {
+      "criterionId": "2.2.2",
+      "title": "Pause, Stop, Hide",
+      "level": "A",
+      "description": "For moving, blinking, scrolling, or auto-updating information, there is a mechanism for the user to pause, stop, or hide it",
+      "whatToCheck": [
+        "Check for auto-playing carousels and slideshows",
+        "Check for animated banners or advertisements",
+        "Check for scrolling news tickers or marquees",
+        "Check for auto-updating content (stock tickers, live feeds)",
+        "Verify pause/stop controls are provided for moving content",
+        "Check for blinking or flashing content",
+        "Verify animated GIFs can be stopped"
+      ],
+      "passCondition": "Moving, blinking, or scrolling content that starts automatically and lasts more than 5 seconds can be paused, stopped, or hidden. Auto-updating content can be paused, stopped, hidden, or have update frequency controlled.",
+      "failIndicators": [
+        "Auto-playing carousels without pause controls",
+        "Animated content without stop mechanism",
+        "Scrolling tickers that cannot be paused",
+        "Auto-updating feeds without pause option",
+        "Blinking text or elements without controls",
+        "Animated GIFs that loop continuously without pause option",
+        "Background videos without pause controls"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect <marquee> and <blink> elements",
+        "Detect CSS animations and transitions",
+        "Detect auto-play video/audio",
+        "Check for carousel/slider patterns",
+        "Detect GIF images"
+      ]
+    },
+    "2.3.1": {
+      "criterionId": "2.3.1",
+      "title": "Three Flashes or Below Threshold",
+      "level": "A",
+      "description": "Web pages do not contain anything that flashes more than three times in any one second period, or the flash is below the general flash and red flash thresholds",
+      "whatToCheck": [
+        "Check for flashing or strobing content in videos",
+        "Check for rapid CSS animations or transitions",
+        "Check for flashing advertisements or banners",
+        "Check for rapidly changing images or GIFs",
+        "Verify any flashing content is below threshold (small area or low contrast)",
+        "Check for JavaScript-driven flashing effects"
+      ],
+      "passCondition": "No content flashes more than 3 times per second, or flashing content is small enough (less than 25% of viewport) and low contrast enough to be below the general flash threshold.",
+      "failIndicators": [
+        "Videos with strobe or flashing effects",
+        "Rapid CSS animations causing flash-like effects",
+        "Flashing banner advertisements",
+        "GIFs with rapid color changes",
+        "JavaScript animations causing rapid flashing",
+        "Content with rapid brightness changes"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect rapid CSS animation timing",
+        "Flag videos for manual review",
+        "Detect GIFs (require manual flash rate check)",
+        "Detect rapid opacity/color transitions"
+      ]
+    },
+    "2.4.1": {
+      "criterionId": "2.4.1",
+      "title": "Bypass Blocks",
+      "level": "A",
+      "description": "A mechanism is available to bypass blocks of content that are repeated on multiple web pages",
+      "whatToCheck": [
+        "Check for 'skip to main content' or 'skip navigation' links",
+        "Verify skip links are visible on keyboard focus",
+        "Check that skip links target the correct destination",
+        "Verify proper use of ARIA landmarks (main, nav, banner, contentinfo)",
+        "Check for proper heading structure to allow heading navigation",
+        "Verify skip links are among the first focusable elements"
+      ],
+      "passCondition": "Users can bypass repeated content blocks using skip links, ARIA landmarks, or proper heading structure. Skip links become visible on focus and function correctly.",
+      "failIndicators": [
+        "No skip link to main content",
+        "Skip links that don't function (broken targets)",
+        "Skip links hidden even on focus",
+        "Missing ARIA landmark regions",
+        "No heading structure for screen reader navigation",
+        "Skip links not among first focusable elements"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect skip links and verify targets",
+        "Check for ARIA landmark regions (main, nav, banner)",
+        "Verify heading structure exists",
+        "Check skip link visibility on focus"
+      ]
+    },
+    "2.4.2": {
+      "criterionId": "2.4.2",
+      "title": "Page Titled",
+      "level": "A",
+      "description": "Web pages have titles that describe topic or purpose",
+      "whatToCheck": [
+        "Check that <title> element exists in <head>",
+        "Verify title describes the page topic or purpose",
+        "Check that title is unique within the website",
+        "Verify title is not generic ('Home', 'Page 1', 'Untitled')",
+        "Check that title updates for single-page applications",
+        "Verify title includes site name and specific page identifier"
+      ],
+      "passCondition": "Each page has a <title> that accurately describes its topic or purpose, is unique within the site, and distinguishes the page from other pages.",
+      "failIndicators": [
+        "Missing <title> element",
+        "Empty or whitespace-only title",
+        "Generic titles like 'Untitled', 'Home', 'Page'",
+        "Same title used on multiple different pages",
+        "Title doesn't describe page content",
+        "Title not updated on SPA route changes"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect presence of <title> element",
+        "Check for empty or generic titles",
+        "Verify title is not just the site name",
+        "Check title length (not too short or too long)"
+      ]
+    },
+    "2.4.3": {
+      "criterionId": "2.4.3",
+      "title": "Focus Order",
+      "level": "A",
+      "description": "If a web page can be navigated sequentially and the navigation sequences affect meaning or operation, focusable components receive focus in an order that preserves meaning and operability",
+      "whatToCheck": [
+        "Tab through all interactive elements and verify logical order",
+        "Check that focus order matches visual reading order",
+        "Verify tabindex values don't create illogical focus order",
+        "Check modal dialogs maintain focus within the dialog",
+        "Verify focus moves logically through forms",
+        "Check that dynamically added content receives focus appropriately"
+      ],
+      "passCondition": "When navigating with Tab key, focus moves through interactive elements in a logical order that matches the visual layout and preserves meaning.",
+      "failIndicators": [
+        "Focus order doesn't match visual order",
+        "Positive tabindex values creating confusing order",
+        "Focus jumping unexpectedly around the page",
+        "Focus moving to hidden or off-screen elements",
+        "Modal dialogs allowing focus to escape to background",
+        "Form fields in illogical tab order"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect positive tabindex values",
+        "Compare DOM order with visual order",
+        "Detect focus management issues in modals",
+        "Check for tabindex on non-interactive elements"
+      ]
+    },
+    "2.4.4": {
+      "criterionId": "2.4.4",
+      "title": "Link Purpose (In Context)",
+      "level": "A",
+      "description": "The purpose of each link can be determined from the link text alone or from the link text together with its programmatically determined link context",
+      "whatToCheck": [
+        "Check that link text describes the destination or purpose",
+        "Verify 'click here', 'read more', 'learn more' links have context",
+        "Check that image links have descriptive alt text",
+        "Verify link purpose is clear from surrounding context (sentence, paragraph, list item)",
+        "Check that links with same text go to same destination",
+        "Verify aria-label or aria-labelledby provides additional context when needed"
+      ],
+      "passCondition": "Each link's purpose can be determined from the link text alone, or from the link text combined with its programmatically determined context (enclosing sentence, paragraph, list item, table cell, or associated header).",
+      "failIndicators": [
+        "Ambiguous links like 'click here' without context",
+        "'Read more' links without identifying what will be read",
+        "Multiple 'Learn more' links without differentiation",
+        "Image links without descriptive alt text",
+        "Links with identical text going to different destinations",
+        "Links that only make sense visually (based on position)"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect ambiguous link text patterns",
+        "Check for empty or missing link text",
+        "Detect image-only links without alt text",
+        "Check for aria-label on ambiguous links"
+      ]
+    },
+    "2.4.5": {
+      "criterionId": "2.4.5",
+      "title": "Multiple Ways",
+      "level": "AA",
+      "description": "More than one way is available to locate a web page within a set of web pages, except where the page is the result of, or a step in, a process",
+      "whatToCheck": [
+        "Check for site navigation menu",
+        "Check for site search functionality",
+        "Check for sitemap page",
+        "Check for table of contents (for long documents)",
+        "Verify links between related pages",
+        "Check for breadcrumb navigation"
+      ],
+      "passCondition": "At least two of the following are available to find pages: navigation menus, search function, site map, table of contents, or links from related pages. Exception for process steps.",
+      "failIndicators": [
+        "Only one way to navigate to pages",
+        "No search functionality on large sites",
+        "No sitemap available",
+        "No navigation between related content",
+        "Sequential-only access to content"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect presence of navigation landmarks",
+        "Detect search form elements",
+        "Check for sitemap links",
+        "Detect breadcrumb patterns"
+      ]
+    },
+    "2.4.6": {
+      "criterionId": "2.4.6",
+      "title": "Headings and Labels",
+      "level": "AA",
+      "description": "Headings and labels describe topic or purpose",
+      "whatToCheck": [
+        "Check that headings accurately describe the content that follows",
+        "Verify form labels clearly describe the expected input",
+        "Check that headings are not used solely for visual styling",
+        "Verify section headings identify section content",
+        "Check that button labels describe their action",
+        "Verify fieldset legends describe the group purpose"
+      ],
+      "passCondition": "All headings describe their following content. All form labels describe expected input. Labels and headings are descriptive, not just decorative.",
+      "failIndicators": [
+        "Vague headings like 'Section 1', 'More Information'",
+        "Form labels that don't describe expected input",
+        "Headings used only for visual styling without semantic meaning",
+        "Generic button labels like 'Submit' without context",
+        "Misleading headings that don't match content"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect presence of headings and labels",
+        "Check for empty or very short headings",
+        "Detect generic label patterns",
+        "Verify form elements have associated labels"
+      ]
+    },
+    "2.4.7": {
+      "criterionId": "2.4.7",
+      "title": "Focus Visible",
+      "level": "AA",
+      "description": "Any keyboard operable user interface has a mode of operation where the keyboard focus indicator is visible",
+      "whatToCheck": [
+        "Tab through all interactive elements and verify focus is visible",
+        "Check that focus indicator has sufficient contrast",
+        "Verify custom focus styles don't remove visibility",
+        "Check that outline: none is not used without alternative focus style",
+        "Verify focus is visible on all interactive elements (links, buttons, inputs)",
+        "Check focus visibility in high contrast mode"
+      ],
+      "passCondition": "When navigating with keyboard, the currently focused element is always visually distinguishable from other elements through a visible focus indicator.",
+      "failIndicators": [
+        "CSS outline: none without alternative focus style",
+        "Focus indicator with insufficient contrast",
+        "Custom controls without visible focus state",
+        "Focus indicator too subtle to be noticed",
+        "Some elements lacking focus indicators",
+        "Focus indicator hidden by adjacent elements"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect outline: none/0 without :focus-visible styles",
+        "Check focus indicator contrast",
+        "Verify all focusable elements have focus styles",
+        "Detect focus-related CSS properties"
+      ]
+    },
+    "2.5.1": {
+      "criterionId": "2.5.1",
+      "title": "Pointer Gestures",
+      "level": "A",
+      "description": "All functionality that uses multipoint or path-based gestures for operation can be operated with a single pointer without a path-based gesture",
+      "whatToCheck": [
+        "Check for pinch-to-zoom functionality (has alternative like buttons)",
+        "Check for swipe gestures (has alternative like arrows or buttons)",
+        "Check for multi-finger gestures (has single-finger or click alternatives)",
+        "Verify drag-and-drop has click-based alternative",
+        "Check for drawing or freehand path gestures (has alternatives)",
+        "Verify maps and interactive graphics have button controls"
+      ],
+      "passCondition": "Any functionality requiring multi-point gestures (pinch, multi-touch) or path-based gestures (swiping, dragging) has single-pointer alternatives (tap, click).",
+      "failIndicators": [
+        "Pinch-to-zoom without button alternative",
+        "Swipe-only navigation without arrows or buttons",
+        "Multi-touch gestures without single-pointer alternative",
+        "Path-based drawing required without alternatives",
+        "Slider that requires dragging without click-to-set"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect touch event handlers",
+        "Detect gesture libraries",
+        "Check for alternative controls near gesture areas",
+        "Detect slider/carousel patterns"
+      ]
+    },
+    "2.5.2": {
+      "criterionId": "2.5.2",
+      "title": "Pointer Cancellation",
+      "level": "A",
+      "description": "For functionality that can be operated using a single pointer, at least one of the following is true: no down-event, can abort or undo, up reversal, or essential",
+      "whatToCheck": [
+        "Check that actions execute on mouse-up, not mouse-down",
+        "Verify dragging away from target before release cancels action",
+        "Check for undo functionality for pointer-triggered actions",
+        "Verify accidental clicks can be avoided by moving pointer away",
+        "Check submit buttons don't trigger on mousedown"
+      ],
+      "passCondition": "Single-pointer actions either: trigger on up-event (not down-event), can be aborted by moving pointer away, can be undone after completion, or down-event is essential.",
+      "failIndicators": [
+        "Actions triggered on mousedown without reversal option",
+        "Click actions that cannot be cancelled by moving away",
+        "Destructive actions without undo option",
+        "Critical functionality triggered on pointer down-event"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect mousedown/pointerdown event handlers",
+        "Check for click vs mousedown event usage",
+        "Detect touchstart handlers without cancellation logic"
+      ]
+    },
+    "2.5.3": {
+      "criterionId": "2.5.3",
+      "title": "Label in Name",
+      "level": "A",
+      "description": "For user interface components with labels that include text or images of text, the name contains the text that is presented visually",
+      "whatToCheck": [
+        "Check that visible button text matches accessible name",
+        "Verify icon buttons with visible labels include that text in accessible name",
+        "Check form field labels match their accessible names",
+        "Verify image buttons include visible text in alt attribute",
+        "Check aria-label includes visible text (not just replaces it)",
+        "Verify links' accessible names include visible link text"
+      ],
+      "passCondition": "For all UI components with visible text labels, the accessible name (computed from aria-label, aria-labelledby, or native semantics) contains the visible text.",
+      "failIndicators": [
+        "aria-label that doesn't include visible text",
+        "Button with different aria-label than visible text",
+        "Icon with visible label but aria-label doesn't match",
+        "Form field with label text not in accessible name",
+        "Image with text where alt doesn't match visible text"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Compare visible text with aria-label content",
+        "Check that aria-label contains visible text",
+        "Detect mismatch between label and accessible name",
+        "Verify button text matches accessible name"
+      ]
+    },
+    "2.5.4": {
+      "criterionId": "2.5.4",
+      "title": "Motion Actuation",
+      "level": "A",
+      "description": "Functionality that can be operated by device motion or user motion can also be operated by user interface components and responding to the motion can be disabled",
+      "whatToCheck": [
+        "Check for shake-to-undo or shake-triggered actions",
+        "Check for tilt or device orientation-based controls",
+        "Check for motion-based gestures (wave, nod detection)",
+        "Verify alternative UI controls exist for motion actions",
+        "Check for option to disable motion-based responses",
+        "Verify accelerometer/gyroscope features have alternatives"
+      ],
+      "passCondition": "Any functionality triggered by device motion (shaking, tilting) or user motion has equivalent UI component controls, and motion response can be disabled to prevent accidental activation.",
+      "failIndicators": [
+        "Shake-to-undo without button alternative",
+        "Tilt-to-scroll without alternative controls",
+        "Motion-only features without UI alternatives",
+        "No option to disable motion responses",
+        "Essential actions only available via motion"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect DeviceMotionEvent or DeviceOrientationEvent listeners",
+        "Detect accelerometer/gyroscope API usage",
+        "Check for motion-related JavaScript libraries"
+      ]
+    },
+    "3.1.1": {
+      "criterionId": "3.1.1",
+      "title": "Language of Page",
+      "level": "A",
+      "description": "The default human language of each web page can be programmatically determined",
+      "whatToCheck": [
+        "Check that the <html> element has a valid lang attribute",
+        "Verify the lang attribute value matches the primary language of the page content",
+        "Check that the lang attribute uses a valid BCP 47 language tag (e.g., 'en', 'en-US', 'es', 'fr')",
+        "Verify the lang attribute is not empty or invalid",
+        "Check that the xml:lang attribute matches lang if both are present (XHTML)"
+      ],
+      "passCondition": "The <html> element has a lang attribute with a valid language code that accurately identifies the primary language of the page content.",
+      "failIndicators": [
+        "Missing lang attribute on <html> element",
+        "Empty lang attribute",
+        "Invalid language code format",
+        "Language code doesn't match actual page content language",
+        "Mismatch between lang and xml:lang attributes"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect presence of lang attribute on <html>",
+        "Validate lang attribute format against BCP 47",
+        "Check for empty or missing lang values",
+        "Detect lang/xml:lang mismatch"
+      ]
+    },
+    "3.1.2": {
+      "criterionId": "3.1.2",
+      "title": "Language of Parts",
+      "level": "AA",
+      "description": "The human language of each passage or phrase in the content can be programmatically determined except for proper names, technical terms, words of indeterminate language, and words or phrases that have become part of the vernacular",
+      "whatToCheck": [
+        "Check that text in a different language from the page default has a lang attribute",
+        "Verify foreign language quotes, phrases, or passages are marked with appropriate lang attribute",
+        "Check that language changes are marked on the containing element or span",
+        "Verify technical terms, proper names, and loan words that don't need marking",
+        "Check multilingual content for proper language identification"
+      ],
+      "passCondition": "All passages or phrases in a different language from the page's default language are identified with the lang attribute, except for proper names, technical terms, and commonly understood loan words.",
+      "failIndicators": [
+        "Foreign language text without lang attribute",
+        "Incorrect language code on multilingual content",
+        "Large sections of different-language text unmarked",
+        "Mixed language content without proper demarcation"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect potential foreign language text patterns",
+        "Check for lang attributes on text within the page",
+        "Validate language codes on embedded content",
+        "Compare text content with declared language"
+      ]
+    },
+    "3.2.1": {
+      "criterionId": "3.2.1",
+      "title": "On Focus",
+      "level": "A",
+      "description": "When any user interface component receives focus, it does not initiate a change of context",
+      "whatToCheck": [
+        "Check that focusing on form fields doesn't trigger form submission",
+        "Verify focusing on links doesn't navigate to a new page",
+        "Check that focusing on elements doesn't open new windows or popups",
+        "Verify focusing doesn't cause significant content changes",
+        "Check that tab focus on navigation items doesn't auto-expand menus unexpectedly",
+        "Verify focus doesn't trigger modal dialogs or overlays"
+      ],
+      "passCondition": "Moving focus to any element (via Tab key or programmatically) does not cause a change of context such as form submission, page navigation, new window opening, or significant content reorganization.",
+      "failIndicators": [
+        "Form submits when field receives focus",
+        "New window or tab opens on focus",
+        "Page navigates away when element receives focus",
+        "Major content changes occur when element is focused",
+        "Unexpected modal or popup appears on focus",
+        "Auto-submit or auto-action triggered by onfocus event"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect onfocus event handlers",
+        "Check for focus-triggered navigation",
+        "Detect window.open calls in focus handlers",
+        "Check for form.submit calls in focus handlers"
+      ]
+    },
+    "3.2.2": {
+      "criterionId": "3.2.2",
+      "title": "On Input",
+      "level": "A",
+      "description": "Changing the setting of any user interface component does not automatically cause a change of context unless the user has been advised of the behavior before using the component",
+      "whatToCheck": [
+        "Check that selecting a radio button doesn't submit a form automatically",
+        "Verify changing a dropdown selection doesn't navigate to a new page",
+        "Check that checking a checkbox doesn't trigger unexpected actions",
+        "Verify typing in a text field doesn't auto-submit or navigate",
+        "Check that users are warned if input changes will cause context changes",
+        "Verify search-as-you-type doesn't navigate away unexpectedly"
+      ],
+      "passCondition": "Changing input values (selecting options, checking boxes, typing) does not trigger context changes unless the user is warned beforehand. A submit button or explicit action is required for context changes.",
+      "failIndicators": [
+        "Dropdown selection auto-navigates to new page",
+        "Radio button selection auto-submits form",
+        "Checkbox triggers unexpected modal or navigation",
+        "Text input causes page refresh or navigation",
+        "No warning provided before context-changing input",
+        "onChange handlers that submit forms or navigate"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect onchange event handlers on form elements",
+        "Check for form.submit calls in change handlers",
+        "Detect navigation in select/radio change handlers",
+        "Check for context-change warnings near inputs"
+      ]
+    },
+    "3.2.3": {
+      "criterionId": "3.2.3",
+      "title": "Consistent Navigation",
+      "level": "AA",
+      "description": "Navigational mechanisms that are repeated on multiple web pages within a set of web pages occur in the same relative order each time they are repeated, unless a change is initiated by the user",
+      "whatToCheck": [
+        "Check that main navigation appears in the same position across pages",
+        "Verify navigation links are in the same order across pages",
+        "Check that repeated components (header, footer, sidebar) maintain position",
+        "Verify search functionality appears in consistent location",
+        "Check that skip links appear in the same position",
+        "Verify breadcrumbs and secondary navigation are consistently placed"
+      ],
+      "passCondition": "Navigation menus, links, and other repeated navigational elements appear in the same relative order and position across all pages within the website, unless the user has customized the layout.",
+      "failIndicators": [
+        "Navigation items in different order on different pages",
+        "Header/footer components repositioned between pages",
+        "Search box moving to different locations",
+        "Skip links appearing inconsistently",
+        "Secondary navigation changing position",
+        "Inconsistent placement of login/account links"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Compare navigation structure across multiple pages",
+        "Check header/footer landmark positions",
+        "Detect navigation element ordering differences",
+        "Compare repeated component positions"
+      ]
+    },
+    "3.2.4": {
+      "criterionId": "3.2.4",
+      "title": "Consistent Identification",
+      "level": "AA",
+      "description": "Components that have the same functionality within a set of web pages are identified consistently",
+      "whatToCheck": [
+        "Check that search fields are labeled consistently across pages",
+        "Verify submit buttons use consistent labels ('Submit', 'Send', 'Go')",
+        "Check that icons representing same function have consistent alt text",
+        "Verify navigation links to same destination use consistent text",
+        "Check that form fields for same data use consistent labels",
+        "Verify print, share, download icons are labeled consistently"
+      ],
+      "passCondition": "Components with the same functionality (search, submit, navigation, icons) are identified with consistent labels, names, and text alternatives throughout the website.",
+      "failIndicators": [
+        "Search labeled as 'Search' on one page and 'Find' on another",
+        "Submit buttons with inconsistent labels",
+        "Same icon with different alt text across pages",
+        "Same link destination with different link text",
+        "Form fields for same data with different labels",
+        "Inconsistent naming of recurring interface elements"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Compare button labels across pages",
+        "Check icon alt text consistency",
+        "Detect form field label variations",
+        "Compare navigation link text"
+      ]
+    },
+    "3.3.1": {
+      "criterionId": "3.3.1",
+      "title": "Error Identification",
+      "level": "A",
+      "description": "If an input error is automatically detected, the item that is in error is identified and the error is described to the user in text",
+      "whatToCheck": [
+        "Check that form validation errors are displayed as text (not just color)",
+        "Verify the specific field with error is identified",
+        "Check that error messages describe what went wrong",
+        "Verify error messages are programmatically associated with fields (aria-describedby)",
+        "Check that errors are announced to screen readers (aria-live or role='alert')",
+        "Verify error state is indicated with more than just color"
+      ],
+      "passCondition": "When input errors occur, the specific field is identified and a text description explains the error. Errors are programmatically associated with their fields and announced to assistive technology.",
+      "failIndicators": [
+        "Errors indicated only by color change",
+        "Generic error messages without field identification",
+        "No text description of what error occurred",
+        "Error messages not associated with form fields",
+        "Errors not announced to screen readers",
+        "Vague error messages like 'Invalid input'"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect error message patterns",
+        "Check for aria-describedby on form fields",
+        "Detect aria-live regions for errors",
+        "Check for role='alert' on error messages",
+        "Verify error indicators use more than color"
+      ]
+    },
+    "3.3.2": {
+      "criterionId": "3.3.2",
+      "title": "Labels or Instructions",
+      "level": "A",
+      "description": "Labels or instructions are provided when content requires user input",
+      "whatToCheck": [
+        "Check that all form inputs have visible labels",
+        "Verify labels are programmatically associated with inputs",
+        "Check that required fields are indicated (asterisk, 'required' text)",
+        "Verify format requirements are provided (e.g., 'MM/DD/YYYY')",
+        "Check that complex inputs have helpful instructions",
+        "Verify placeholder text is not used as the only label"
+      ],
+      "passCondition": "All form fields have clear, visible labels that are programmatically associated. Instructions for required fields, expected formats, and complex inputs are provided.",
+      "failIndicators": [
+        "Form inputs without visible labels",
+        "Labels not programmatically associated with inputs",
+        "Required fields not indicated",
+        "No format hints for date, phone, or other formatted fields",
+        "Placeholder text used as the only label",
+        "Complex inputs without instructions"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect form inputs without labels",
+        "Check label/input associations",
+        "Detect placeholder-only labeled inputs",
+        "Check for required field indicators",
+        "Verify aria-describedby for instructions"
+      ]
+    },
+    "3.3.3": {
+      "criterionId": "3.3.3",
+      "title": "Error Suggestion",
+      "level": "AA",
+      "description": "If an input error is automatically detected and suggestions for correction are known, then the suggestions are provided to the user, unless it would jeopardize security or purpose",
+      "whatToCheck": [
+        "Check that error messages include suggestions for fixing the error",
+        "Verify format errors suggest the correct format",
+        "Check that out-of-range errors indicate the allowed range",
+        "Verify suggestions don't compromise security (e.g., valid usernames)",
+        "Check that suggestions are specific and actionable",
+        "Verify password errors don't reveal security-sensitive rules unnecessarily"
+      ],
+      "passCondition": "Error messages include specific suggestions for how to correct the error, such as expected format, allowed values, or example input. Security-sensitive fields may omit specific suggestions.",
+      "failIndicators": [
+        "Error messages without correction suggestions",
+        "Format errors without showing expected format",
+        "Out-of-range errors without showing allowed range",
+        "Generic 'invalid' messages without guidance",
+        "Required field errors without clear guidance",
+        "Suggestions that could compromise security"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Analyze error message content for suggestions",
+        "Check for format examples in error messages",
+        "Detect generic vs specific error patterns",
+        "Check for aria-describedby with suggestions"
+      ]
+    },
+    "3.3.4": {
+      "criterionId": "3.3.4",
+      "title": "Error Prevention (Legal, Financial, Data)",
+      "level": "AA",
+      "description": "For web pages that cause legal commitments or financial transactions, or that modify or delete user-controllable data, submissions are reversible, verified, or confirmed",
+      "whatToCheck": [
+        "Check for confirmation pages before final submission of financial transactions",
+        "Verify ability to review and edit data before legal commitments",
+        "Check for 'Are you sure?' confirmations for data deletion",
+        "Verify submitted data can be reversed, corrected, or cancelled",
+        "Check for review step showing all entered information",
+        "Verify edit capabilities on confirmation/review pages"
+      ],
+      "passCondition": "For legal, financial, or data-modifying transactions, at least one of: (1) submissions are reversible, (2) data is checked for errors with correction opportunity, or (3) a confirmation step allows review before final submission.",
+      "failIndicators": [
+        "Immediate financial transaction without confirmation",
+        "Legal agreements submitted without review step",
+        "Data deletion without confirmation dialog",
+        "No ability to edit data after entering",
+        "No review page before final submission",
+        "Irreversible actions without user confirmation"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect form submission patterns",
+        "Check for confirmation dialog patterns",
+        "Detect delete/cancel button patterns",
+        "Check for multi-step form indicators",
+        "Detect financial transaction patterns"
+      ]
+    },
+    "4.1.1": {
+      "criterionId": "4.1.1",
+      "title": "Parsing",
+      "level": "A",
+      "description": "In content implemented using markup languages, elements have complete start and end tags, elements are nested according to their specifications, elements do not contain duplicate attributes, and any IDs are unique (Note: This criterion was deprecated in WCAG 2.2 as browsers now handle parsing errors)",
+      "whatToCheck": [
+        "Check for duplicate ID attributes on elements",
+        "Verify elements have proper opening and closing tags",
+        "Check for properly nested elements (no overlapping tags)",
+        "Verify no duplicate attributes on the same element",
+        "Check that obsolete elements are not used inappropriately",
+        "Verify HTML validates against the doctype specification"
+      ],
+      "passCondition": "HTML is well-formed with no duplicate IDs, properly nested elements, complete start/end tags, and no duplicate attributes. Note: Modern browsers handle most parsing errors, but duplicate IDs can still cause accessibility issues.",
+      "failIndicators": [
+        "Duplicate ID attributes on multiple elements",
+        "Unclosed or improperly nested tags",
+        "Duplicate attributes on same element",
+        "Invalid markup that could confuse assistive technology",
+        "Missing required parent/child element relationships"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Detect duplicate ID attributes",
+        "Validate HTML structure",
+        "Check for proper tag nesting",
+        "Detect duplicate attributes",
+        "Validate against doctype"
+      ]
+    },
+    "4.1.2": {
+      "criterionId": "4.1.2",
+      "title": "Name, Role, Value",
+      "level": "A",
+      "description": "For all user interface components, the name and role can be programmatically determined; states, properties, and values that can be set by the user can be programmatically set; and notification of changes is available to user agents, including assistive technologies",
+      "whatToCheck": [
+        "Check that custom controls have appropriate ARIA roles",
+        "Verify all interactive elements have accessible names",
+        "Check that custom widgets expose their state (expanded, selected, checked)",
+        "Verify value changes in custom controls are announced",
+        "Check that native HTML elements are used appropriately",
+        "Verify ARIA properties reflect the current state"
+      ],
+      "passCondition": "All UI components have programmatically determinable names and roles. Custom controls expose their state, properties, and values to assistive technology. State changes trigger appropriate notifications.",
+      "failIndicators": [
+        "Custom controls without ARIA roles",
+        "Interactive elements without accessible names",
+        "Custom widgets not exposing expanded/collapsed state",
+        "Toggle buttons not exposing pressed state",
+        "Select-like controls not exposing selected value",
+        "State changes not announced to assistive technology"
+      ],
+      "requiresManualReview": false,
+      "automatedChecksPossible": [
+        "Check for accessible names on interactive elements",
+        "Verify ARIA roles on custom controls",
+        "Check ARIA state attributes (aria-expanded, aria-selected)",
+        "Detect custom controls missing ARIA",
+        "Verify role/state consistency"
+      ]
+    },
+    "4.1.3": {
+      "criterionId": "4.1.3",
+      "title": "Status Messages",
+      "level": "AA",
+      "description": "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus",
+      "whatToCheck": [
+        "Check that success messages use aria-live='polite' or role='status'",
+        "Verify error messages use aria-live='assertive' or role='alert'",
+        "Check that progress updates are announced (aria-live)",
+        "Verify search results count changes are announced",
+        "Check that loading indicators convey status to screen readers",
+        "Verify form submission success/failure is announced"
+      ],
+      "passCondition": "Status messages (success, error, progress, results) are programmatically associated with ARIA live regions or status roles so they are announced by assistive technology without moving focus.",
+      "failIndicators": [
+        "Success messages not announced to screen readers",
+        "Error messages without aria-live or role='alert'",
+        "Progress indicators silent to assistive technology",
+        "Search result counts not announced",
+        "Loading states not communicated",
+        "Form submission results not announced"
+      ],
+      "requiresManualReview": true,
+      "automatedChecksPossible": [
+        "Detect aria-live regions",
+        "Check for role='status' and role='alert'",
+        "Detect status message patterns",
+        "Check for dynamic content update announcements"
+      ]
+    }
+  }
+}

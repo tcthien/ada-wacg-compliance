@@ -27,6 +27,7 @@ import {
   moveToProcessed,
   moveToFailed,
 } from './directory-scanner.js';
+import { CriteriaVerificationCache } from './criteria-verification-cache.js';
 
 /**
  * Shutdown context for graceful shutdown handling
@@ -79,6 +80,23 @@ export interface CliOptions {
   verbose?: boolean;
   quiet?: boolean;
   jsonSummary?: boolean;
+
+  // Criteria verification options (Task 25)
+  skipCriteriaVerification?: boolean;
+  criteriaBatchSize?: number;
+
+  // Checkpoint/Resume options (Task 25)
+  fresh?: boolean;
+
+  // Cache options (Task 25)
+  noCache?: boolean;
+  clearCache?: boolean;
+  cacheStats?: boolean;
+  cacheDir?: string;
+  cacheTtl?: number;
+
+  // Directory options (Task 25)
+  checkpointDir?: string;
 }
 
 /**
@@ -115,7 +133,31 @@ function setupCli(): Command {
   // Checkpoint options
   program
     .option('-r, --resume', 'Resume from checkpoint', false)
-    .option('--clear-checkpoint', 'Clear checkpoint and start fresh', false);
+    .option('--clear-checkpoint', 'Clear checkpoint and start fresh', false)
+    .option('--fresh', 'Ignore existing checkpoints and start fresh', false)
+    .option('--checkpoint-dir <path>', 'Custom checkpoint directory');
+
+  // Criteria verification options
+  program
+    .option(
+      '--skip-criteria-verification',
+      'Skip WCAG criteria verification (faster, issue enhancement only)',
+      false
+    )
+    .option(
+      '--criteria-batch-size <number>',
+      'Number of criteria to verify per AI batch call',
+      parseIntOption,
+      10
+    );
+
+  // Cache options
+  program
+    .option('--no-cache', 'Disable cache (always call AI, useful for testing)')
+    .option('--clear-cache', 'Clear cache before processing', false)
+    .option('--cache-stats', 'Show cache statistics', false)
+    .option('--cache-dir <path>', 'Custom cache directory')
+    .option('--cache-ttl <days>', 'Cache TTL in days', parseIntOption, 7);
 
   // Feature flags
   program
@@ -285,6 +327,40 @@ async function main(): Promise<void> {
     }
   }
 
+  // Handle --clear-cache first (can be standalone or before processing)
+  if (options.clearCache) {
+    const cacheDir = options.cacheDir ?? '.ai-scan-cache/';
+    const cache = new CriteriaVerificationCache({ cacheDir });
+    await cache.clearAll();
+    console.log(`Cache cleared (${cacheDir})`);
+
+    // If no input specified, just clear cache and exit
+    if (!options.input && !options.inputDir && !options.cacheStats) {
+      process.exit(ExitCode.SUCCESS);
+    }
+  }
+
+  // Handle --cache-stats (standalone operation, doesn't require input)
+  if (options.cacheStats) {
+    const cacheDir = options.cacheDir ?? '.ai-scan-cache/';
+    const cache = new CriteriaVerificationCache({ cacheDir });
+    await cache.warmup();
+    const stats = cache.getStats();
+
+    console.log('\n=== Cache Statistics ===');
+    console.log(`  Cache Directory: ${cacheDir}`);
+    console.log(`  Entries: ${stats.entriesCount}`);
+    console.log(`  Hits: ${stats.hits}`);
+    console.log(`  Misses: ${stats.misses}`);
+    console.log(`  Hit Rate: ${(stats.hitRate * 100).toFixed(1)}%`);
+    console.log(`  Tokens Saved: ${stats.totalSavedTokens}`);
+
+    // If no input specified, just show stats and exit
+    if (!options.input && !options.inputDir) {
+      process.exit(ExitCode.SUCCESS);
+    }
+  }
+
   // Validate core options
   if (!options.input && !options.inputDir) {
     console.error('Error: Either --input or --input-dir must be specified');
@@ -307,6 +383,24 @@ async function main(): Promise<void> {
   // Validate checkpoint options
   if (options.resume && options.clearCheckpoint) {
     console.error('Error: --resume and --clear-checkpoint are mutually exclusive');
+    process.exit(1);
+  }
+
+  // Validate --resume and --fresh are mutually exclusive
+  if (options.resume && options.fresh) {
+    console.error('Error: --resume and --fresh are mutually exclusive');
+    process.exit(1);
+  }
+
+  // Validate --clear-checkpoint and --fresh are mutually exclusive
+  if (options.clearCheckpoint && options.fresh) {
+    console.error('Error: --clear-checkpoint and --fresh are mutually exclusive');
+    process.exit(1);
+  }
+
+  // Validate cache options
+  if (options.noCache && options.clearCache) {
+    console.error('Error: --no-cache and --clear-cache are mutually exclusive');
     process.exit(1);
   }
 
@@ -441,10 +535,25 @@ async function processSingleFile(options: CliOptions): Promise<void> {
     const processor = new MiniBatchProcessor(
       logger,
       {
+        // Core processing options
         delay: options.delay,
         timeout: 180000, // 3 minutes
         retries: 3,
         verbose: options.verbose,
+
+        // Criteria verification options
+        enableCriteriaVerification: true, // Enable by default
+        skipCriteriaVerification: options.skipCriteriaVerification ?? false,
+        criteriaBatchSize: options.criteriaBatchSize ?? 10,
+
+        // Cache options
+        useCache: !options.noCache,
+        cacheDir: options.cacheDir ?? '.ai-scan-cache/',
+        cacheTtlDays: options.cacheTtl ?? 7,
+
+        // Checkpoint options
+        checkpointDir: options.checkpointDir ?? '.ai-scan-checkpoints/',
+        resumeFromCheckpoint: !options.fresh, // Resume unless --fresh is specified
       },
       checkpointManager
     );
@@ -674,10 +783,25 @@ async function processDirectory(options: CliOptions): Promise<void> {
             const processor = new MiniBatchProcessor(
               logger,
               {
+                // Core processing options
                 delay: options.delay,
                 timeout: 180000, // 3 minutes
                 retries: 3,
                 verbose: options.verbose ?? false,
+
+                // Criteria verification options
+                enableCriteriaVerification: true, // Enable by default
+                skipCriteriaVerification: options.skipCriteriaVerification ?? false,
+                criteriaBatchSize: options.criteriaBatchSize ?? 10,
+
+                // Cache options
+                useCache: !options.noCache,
+                cacheDir: options.cacheDir ?? '.ai-scan-cache/',
+                cacheTtlDays: options.cacheTtl ?? 7,
+
+                // Checkpoint options
+                checkpointDir: options.checkpointDir ?? '.ai-scan-checkpoints/',
+                resumeFromCheckpoint: !options.fresh, // Resume unless --fresh is specified
               },
               undefined // No checkpoint in directory mode
             );

@@ -6,7 +6,7 @@
  */
 
 import { getPrismaClient } from '../../config/database.js';
-import type { Scan, ScanResult, Issue, ScanStatus, WcagLevel, AiStatus } from '@prisma/client';
+import type { Scan, ScanResult, Issue, ScanStatus, WcagLevel, AiStatus, CriteriaVerification } from '@prisma/client';
 
 /**
  * Scan Repository Error
@@ -27,7 +27,10 @@ export class ScanRepositoryError extends Error {
  * Scan with related result data
  */
 export interface ScanWithResult extends Scan {
-  scanResult: (ScanResult & { issues: Issue[] }) | null;
+  scanResult: (ScanResult & {
+    issues: Issue[];
+    criteriaVerifications: CriteriaVerification[];
+  }) | null;
 }
 
 /**
@@ -177,6 +180,11 @@ export async function getScanById(id: string): Promise<ScanWithResult | null> {
             issues: {
               orderBy: {
                 impact: 'asc', // CRITICAL first (enum order)
+              },
+            },
+            criteriaVerifications: {
+              orderBy: {
+                criterionId: 'asc', // Sort by criterion ID (1.1.1, 1.2.1, etc.)
               },
             },
           },

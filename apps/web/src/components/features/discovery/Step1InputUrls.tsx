@@ -77,7 +77,8 @@ export function Step1InputUrls({
    */
   const handleMethodChange = useCallback(
     (method: InputMethod) => {
-      setInputMethod(method);
+      // Convert uppercase component InputMethod to lowercase store InputMethod
+      setInputMethod(method.toLowerCase() as 'sitemap' | 'manual');
       setError(null);
     },
     [setInputMethod, setError]
@@ -146,7 +147,7 @@ export function Step1InputUrls({
    * Extract error message from error object
    * Handles both DiscoveryError types and generic Error types
    */
-  const errorMessage = error?.userMessage || null;
+  const errorMessage = error?.message || null;
 
   return (
     <div className="space-y-6">
@@ -162,19 +163,19 @@ export function Step1InputUrls({
 
       {/* Input method selector */}
       <InputMethodSelector
-        value={inputMethod}
+        value={(inputMethod?.toUpperCase() as InputMethod) || 'SITEMAP'}
         onChange={handleMethodChange}
         disabled={isLoading}
       />
 
       {/* Conditional input based on selected method */}
       <div className="mt-6">
-        {inputMethod === 'SITEMAP' ? (
+        {inputMethod === 'sitemap' ? (
           <SitemapUrlInput
             value={sitemapUrl}
             onChange={handleSitemapUrlChange}
             onSubmit={handleSitemapSubmit}
-            error={errorMessage || undefined}
+            {...(errorMessage ? { error: errorMessage } : {})}
             isLoading={isLoading}
           />
         ) : (
@@ -182,7 +183,7 @@ export function Step1InputUrls({
             value={manualInput}
             onChange={handleManualInputChange}
             onSubmit={handleManualSubmit}
-            error={errorMessage || undefined}
+            {...(errorMessage ? { error: errorMessage } : {})}
             urlCount={currentUrlCount}
             maxUrls={MAX_MANUAL_URLS}
             isLoading={isLoading}

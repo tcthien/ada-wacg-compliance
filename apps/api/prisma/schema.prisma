@@ -119,6 +119,14 @@ enum AiCampaignStatus {
   ENDED
 }
 
+enum CriteriaVerificationStatus {
+  PASS // Verified passing by axe-core
+  FAIL // Issues found by axe-core
+  AI_VERIFIED_PASS // Verified passing by AI
+  AI_VERIFIED_FAIL // Issues found by AI
+  NOT_TESTED // Cannot be automated
+}
+
 // ============================================================================
 // MODELS
 // ============================================================================
@@ -161,21 +169,21 @@ model Scan {
   completedAt    DateTime?  @db.Timestamptz
 
   // Batch scan association (for multi-URL scanning)
-  batchId   String?    @db.Uuid
-  pageTitle String?    @db.VarChar(500) // Page title from discovery
+  batchId   String? @db.Uuid
+  pageTitle String? @db.VarChar(500) // Page title from discovery
 
   // AI Early Bird Scan fields (Task 1.1a)
-  aiEnabled        Boolean   @default(false)
-  aiStatus         AiStatus?
-  aiSummary        String?   @db.Text
-  aiRemediationPlan String?  @db.Text
-  aiProcessedAt    DateTime? @db.Timestamptz
+  aiEnabled         Boolean   @default(false)
+  aiStatus          AiStatus?
+  aiSummary         String?   @db.Text
+  aiRemediationPlan String?   @db.Text
+  aiProcessedAt     DateTime? @db.Timestamptz
 
   // AI token tracking fields (Task 1.1b)
   aiInputTokens    Int?
   aiOutputTokens   Int?
   aiTotalTokens    Int?
-  aiModel          String?   @db.VarChar(100)
+  aiModel          String? @db.VarChar(100)
   aiProcessingTime Int? // Processing time in seconds
 
   // Relations
@@ -215,11 +223,13 @@ model ScanResult {
   minorCount         Int      @default(0)
   passedChecks       Int      @default(0)
   inapplicableChecks Int      @default(0)
+  passedRuleIds      String[] @default([])
   createdAt          DateTime @default(now()) @db.Timestamptz
 
   // Relations
-  scan   Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  issues Issue[]
+  scan                  Scan                   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  issues                Issue[]
+  criteriaVerifications CriteriaVerification[]
 
   @@index([scanId])
   @@map("scan_results")
@@ -246,13 +256,38 @@ model Issue {
   aiPriority      Int? // Business impact score (1-10) calculated by AI
 
   // Relations
-  scanResult ScanResult @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+  scanResult            ScanResult             @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+  criteriaVerifications CriteriaVerification[] @relation("CriteriaIssues")
 
   // Indexes for performance
   @@index([scanResultId])
   @@index([ruleId])
   @@index([impact])
   @@map("issues")
+}
+
+/// WCAG criterion verification status for a scan
+/// Tracks the verification status of each WCAG criterion tested during a scan
+model CriteriaVerification {
+  id           String                     @id @default(uuid()) @db.Uuid
+  scanResultId String                     @db.Uuid
+  criterionId  String                     @db.VarChar(20) // e.g., "1.1.1"
+  status       CriteriaVerificationStatus
+  scanner      String                     @db.VarChar(100) // axe-core, claude-opus-4, N/A
+  confidence   Int? // AI confidence 0-100
+  reasoning    String?                    @db.Text // AI reasoning text
+  createdAt    DateTime                   @default(now()) @db.Timestamptz
+
+  // Relations
+  scanResult ScanResult @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+  issues     Issue[]    @relation("CriteriaIssues")
+
+  // Unique constraint: one verification per criterion per scan
+  @@unique([scanResultId, criterionId])
+  // Indexes for performance
+  @@index([scanResultId])
+  @@index([status])
+  @@map("criteria_verifications")
 }
 
 /// Generated report for a completed scan or batch scan
@@ -272,12 +307,12 @@ model Report {
   scan  Scan?      @relation(fields: [scanId], references: [id], onDelete: Cascade)
   batch BatchScan? @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
+  // Unique constraints for report per scan/batch and format combination
+  @@unique([batchId, format])
   // Indexes for performance
   @@index([scanId])
   @@index([batchId])
   @@index([expiresAt])
-  // Unique constraints for report per scan/batch and format combination
-  @@unique([batchId, format])
   @@map("reports")
 }
 
@@ -428,9 +463,9 @@ model DiscoveryUsage {
 /// Batch scan entity for grouping multiple URL scans together
 /// Enables multi-page scanning from discovery feature
 model BatchScan {
-  id             String      @id @default(uuid()) @db.Uuid
-  guestSessionId String?     @db.Uuid
-  userId         String?     @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  guestSessionId String? @db.Uuid
+  userId         String? @db.Uuid
 
   // Batch metadata
   homepageUrl String    @db.VarChar(2048)
@@ -474,17 +509,17 @@ model BatchScan {
 /// AI Early Bird campaign for managing AI scan token budgets
 /// Enables scheduled AI processing campaigns with token budget controls
 model AiCampaign {
-  id               String            @id @default(uuid()) @db.Uuid
-  name             String            @db.VarChar(255)
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String           @db.VarChar(255)
   totalTokenBudget Int // Total token budget allocated for this campaign
-  usedTokens       Int               @default(0) // Tokens consumed so far
-  reservedSlots    Int               @default(0) // Number of scans reserved for this campaign
+  usedTokens       Int              @default(0) // Tokens consumed so far
+  reservedSlots    Int              @default(0) // Number of scans reserved for this campaign
   avgTokensPerScan Int // Average tokens expected per scan (for budget planning)
-  status           AiCampaignStatus  @default(ACTIVE)
-  startsAt         DateTime          @db.Timestamptz // Campaign start time
-  endsAt           DateTime          @db.Timestamptz // Campaign end time
-  createdAt        DateTime          @default(now()) @db.Timestamptz
-  updatedAt        DateTime          @updatedAt @db.Timestamptz
+  status           AiCampaignStatus @default(ACTIVE)
+  startsAt         DateTime         @db.Timestamptz // Campaign start time
+  endsAt           DateTime         @db.Timestamptz // Campaign end time
+  createdAt        DateTime         @default(now()) @db.Timestamptz
+  updatedAt        DateTime         @updatedAt @db.Timestamptz
 
   // Relations
   audits AiCampaignAudit[]

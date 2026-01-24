@@ -9,6 +9,20 @@ import { Sparkles, CheckCircle2, BarChart3, Layers } from 'lucide-react';
 type WcagLevel = 'A' | 'AA' | 'AAA';
 
 /**
+ * Criteria breakdown for batch
+ */
+export interface BatchCriteriaBreakdown {
+  /** Average number of criteria with issues */
+  criteriaWithIssues: number;
+  /** Average number of criteria passed */
+  criteriaPassed: number;
+  /** Average number of criteria AI-verified */
+  criteriaAiVerified?: number;
+  /** Average number of criteria not testable */
+  criteriaNotTestable: number;
+}
+
+/**
  * Props for BatchCoverageCard component
  */
 export interface BatchCoverageCardProps {
@@ -30,6 +44,8 @@ export interface BatchCoverageCardProps {
   urlsScanned: number;
   /** WCAG conformance level */
   wcagLevel: WcagLevel;
+  /** Criteria breakdown (optional) */
+  breakdown?: BatchCriteriaBreakdown;
   /** Additional CSS classes */
   className?: string;
 }
@@ -113,6 +129,7 @@ export function BatchCoverageCard({
   passedChecks,
   urlsScanned,
   wcagLevel,
+  breakdown,
   className,
 }: BatchCoverageCardProps) {
   // Format coverage percentage display
@@ -213,6 +230,45 @@ export function BatchCoverageCard({
             sublabel="Total across batch"
           />
         </div>
+
+        {/* Criteria Breakdown (if available) */}
+        {breakdown && (
+          <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+              Criteria Breakdown (Average per URL)
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              {breakdown.criteriaWithIssues > 0 && (
+                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                  <div className="text-lg font-bold text-red-700 dark:text-red-300">
+                    {breakdown.criteriaWithIssues}
+                  </div>
+                  <div className="text-xs text-red-600 dark:text-red-400">With Issues</div>
+                </div>
+              )}
+              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+                <div className="text-lg font-bold text-green-700 dark:text-green-300">
+                  {breakdown.criteriaPassed}
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-400">Passed</div>
+              </div>
+              {breakdown.criteriaAiVerified !== undefined && breakdown.criteriaAiVerified > 0 && (
+                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-800">
+                  <div className="text-lg font-bold text-purple-700 dark:text-purple-300">
+                    {breakdown.criteriaAiVerified}
+                  </div>
+                  <div className="text-xs text-purple-600 dark:text-purple-400">AI Verified</div>
+                </div>
+              )}
+              <div className="p-2 bg-slate-100 dark:bg-slate-700/50 rounded border border-slate-200 dark:border-slate-600">
+                <div className="text-lg font-bold text-slate-700 dark:text-slate-300">
+                  {breakdown.criteriaNotTestable}
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Not Testable</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Coverage Disclaimer */}
         <div

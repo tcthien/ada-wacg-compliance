@@ -1,0 +1,73 @@
+{
+  "key": {
+    "contentHash": "6254caa6931554bb",
+    "wcagLevel": "A",
+    "batchNumber": 1
+  },
+  "verifications": [
+    {
+      "criterionId": "2.1.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 82,
+      "reasoning": "Batch 2: Criterion 2.1.2 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.1.4",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 89,
+      "reasoning": "Batch 2: Criterion 2.1.4 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.2.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 84,
+      "reasoning": "Batch 2: Criterion 2.2.1 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.2.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 80,
+      "reasoning": "Batch 2: Criterion 2.2.2 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.3.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 88,
+      "reasoning": "Batch 2: Criterion 2.3.1 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.4.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 93,
+      "reasoning": "Batch 2: Criterion 2.4.1 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.4.2",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 86,
+      "reasoning": "Batch 2: Criterion 2.4.2 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.4.3",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 86,
+      "reasoning": "Batch 2: Criterion 2.4.3 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.4.4",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "Batch 2: Criterion 2.4.4 verification completed with status AI_VERIFIED_PASS."
+    },
+    {
+      "criterionId": "2.5.1",
+      "status": "AI_VERIFIED_PASS",
+      "confidence": 90,
+      "reasoning": "Batch 2: Criterion 2.5.1 verification completed with status AI_VERIFIED_PASS."
+    }
+  ],
+  "tokensUsed": 5735,
+  "aiModel": "claude-opus-4",
+  "createdAt": "2026-01-18T12:59:10.722Z",
+  "expiresAt": "2026-01-25T12:59:10.722Z"
+}

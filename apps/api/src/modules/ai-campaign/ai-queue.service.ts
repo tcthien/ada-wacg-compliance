@@ -15,6 +15,7 @@ import { deductTokens } from './ai-campaign.service.js';
 import { sendEmailQueue } from '../../shared/queue/queues.js';
 import type { EmailJobData } from '../../shared/queue/types.js';
 import type { ImportResult } from './ai-campaign.types.js';
+import { WCAG_CRITERIA } from '@adashield/core';
 
 /**
  * AI Queue Service Error
@@ -525,6 +526,22 @@ export interface AiIssueData {
 }
 
 /**
+ * AI criteria verification data from CSV import
+ */
+export interface AiCriteriaVerificationData {
+  /** WCAG criterion ID (e.g., "1.1.1", "1.4.3") */
+  criterionId: string;
+  /** Verification status */
+  status: 'PASS' | 'FAIL' | 'AI_VERIFIED_PASS' | 'AI_VERIFIED_FAIL' | 'NOT_TESTED';
+  /** Confidence level (0-100) */
+  confidence?: number;
+  /** AI reasoning for the verification */
+  reasoning?: string;
+  /** Related issue IDs if status is FAIL or AI_VERIFIED_FAIL */
+  relatedIssueIds?: string[];
+}
+
+/**
  * Update issues with AI-generated enhancements
  *
  * Bulk updates Issue records with AI-generated explanations, fix suggestions, and
@@ -606,6 +623,543 @@ export async function updateIssuesWithAi(
       err.message
     );
     throw err;
+  }
+}
+
+/**
+ * Create an Issue record from an AI criteria verification failure
+ *
+ * When AI verifies a WCAG criterion as AI_VERIFIED_FAIL and there are no existing
+ * related issues from axe-core, this function creates a new Issue record to make
+ * the AI-detected failure visible in the Issues tab.
+ *
+ * @param tx - Prisma transaction client for atomic operations
+ * @param scanResultId - UUID of the scan result
+ * @param verification - AI criteria verification data with AI_VERIFIED_FAIL status
+ * @param aiModel - AI model name used for the verification
+ * @returns Created Issue record or null if creation failed
+ */
+async function createIssueFromAiVerification(
+  tx: any,
+  scanResultId: string,
+  verification: AiCriteriaVerificationData,
+  aiModel: string
+): Promise<{ id: string; impact: string } | null> {
+  try {
+    const criterionId = verification.criterionId;
+    const wcagCriterion = WCAG_CRITERIA[criterionId];
+
+    // Generate synthetic rule ID for AI-detected issues
+    const ruleId = `ai-wcag-${criterionId}`;
+
+    // Get criterion details for description
+    const criterionTitle = wcagCriterion?.title || `WCAG ${criterionId}`;
+    const criterionDescription = wcagCriterion?.description || `Violation of WCAG criterion ${criterionId}`;
+
+    // Map confidence to impact (higher confidence = more severe)
+    // Default to SERIOUS for AI-detected issues
+    const confidence = verification.confidence ?? 50;
+    let impact: 'CRITICAL' | 'SERIOUS' | 'MODERATE' | 'MINOR';
+    if (confidence >= 90) {
+      impact = 'CRITICAL';
+    } else if (confidence >= 70) {
+      impact = 'SERIOUS';
+    } else if (confidence >= 50) {
+      impact = 'MODERATE';
+    } else {
+      impact = 'MINOR';
+    }
+
+    // Build help URL for WCAG understanding document
+    const wcagVersion = '21'; // WCAG 2.1
+    const helpUrl = `https://www.w3.org/WAI/WCAG${wcagVersion}/Understanding/${criterionId.replace(/\./g, '')}.html`;
+
+    // Create the issue record
+    const issue = await tx.issue.create({
+      data: {
+        scanResultId,
+        ruleId,
+        wcagCriteria: [criterionId],
+        impact,
+        description: `[AI-Detected] ${criterionTitle}: ${criterionDescription}`,
+        helpText: verification.reasoning || `AI analysis detected a potential violation of WCAG ${criterionId} (${criterionTitle}). ${criterionDescription}`,
+        helpUrl,
+        htmlSnippet: '[AI-detected issue - element location requires manual review]',
+        cssSelector: 'body',
+        nodes: [],
+        // AI enhancement fields
+        aiExplanation: verification.reasoning || null,
+        aiFixSuggestion: null, // AI verification doesn't include fix suggestions
+        aiPriority: confidence >= 80 ? 8 : confidence >= 60 ? 6 : 4,
+      },
+      select: {
+        id: true,
+        impact: true,
+      },
+    });
+
+    console.log(
+      `✅ AI Queue Service: Created AI-detected issue ${issue.id} for criterion ${criterionId} (impact: ${impact})`
+    );
+
+    return issue;
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.warn(
+      `⚠️ AI Queue Service: Failed to create issue for AI-detected failure on criterion ${verification.criterionId}:`,
+      err.message
+    );
+    return null;
+  }
+}
+
+/**
+ * Store AI criteria verifications
+ *
+ * Creates CriteriaVerification records for AI-assessed WCAG criteria.
+ * Uses batch operations (createMany + targeted upserts) for efficiency with 50+ verifications.
+ * AI verifications take precedence over existing axe-core verifications.
+ *
+ * Requirements:
+ * - REQ-5.3: Parse ai_criteria_verifications_json, store in CriteriaVerification table, update coverage stats
+ * - REQ-5.4: AI verification takes precedence over axe-core (AI_VERIFIED_* status)
+ * - REQ-6.1: Recalculate criteriaChecked count and coveragePercentage after import
+ *
+ * @param tx - Prisma transaction client for atomic operations
+ * @param scanId - UUID of the scan
+ * @param criteriaVerifications - Array of AI criteria verification data (handles 50+ items efficiently)
+ * @param aiModel - Optional AI model name to use for scanner field
+ * @returns Number of verifications stored
+ *
+ * @example
+ * ```typescript
+ * await prisma.$transaction(async (tx) => {
+ *   const verifications = [
+ *     {
+ *       criterionId: '1.3.5',
+ *       status: 'AI_VERIFIED_PASS',
+ *       confidence: 85,
+ *       reasoning: 'Form fields have autocomplete attributes',
+ *     },
+ *     // ... 50+ more verifications
+ *   ];
+ *   const count = await storeCriteriaVerifications(tx, scanId, verifications, 'claude-opus-4-5-20251101');
+ *   console.log(`Stored ${count} criteria verifications`);
+ * });
+ * ```
+ */
+export async function storeCriteriaVerifications(
+  tx: any,
+  scanId: string,
+  criteriaVerifications: AiCriteriaVerificationData[],
+  aiModel?: string
+): Promise<number> {
+  try {
+    // Validate input - handle empty array gracefully
+    if (!criteriaVerifications || criteriaVerifications.length === 0) {
+      console.log(`ℹ️ AI Queue Service: No criteria verifications to store for scan ${scanId}`);
+      return 0;
+    }
+
+    // First, get the scanResultId and wcagLevel for this scan
+    const scanWithResult = await tx.scan.findUnique({
+      where: { id: scanId },
+      select: {
+        wcagLevel: true,
+        scanResult: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!scanWithResult?.scanResult) {
+      console.warn(
+        `⚠️ AI Queue Service: No scan result found for scan ${scanId}, cannot store criteria verifications`
+      );
+      return 0;
+    }
+
+    const scanResultId = scanWithResult.scanResult.id;
+    const wcagLevel = scanWithResult.wcagLevel;
+    const defaultAiModel = aiModel || 'claude-opus-4-5-20251101';
+
+    // Step 1: Get all existing verifications for this scan result to determine precedence
+    const existingVerifications = await tx.criteriaVerification.findMany({
+      where: { scanResultId },
+      select: {
+        criterionId: true,
+        status: true,
+      },
+    });
+
+    // Step 1b: Get existing issues by their WCAG criteria to check if issues already exist
+    // This helps determine if we need to create new issues for AI_VERIFIED_FAIL criteria
+    const existingIssues = await tx.issue.findMany({
+      where: { scanResultId },
+      select: {
+        id: true,
+        wcagCriteria: true,
+      },
+    });
+
+    // Build a set of WCAG criteria that already have issues
+    const criteriaWithExistingIssues = new Set<string>();
+    for (const issue of existingIssues) {
+      for (const criterion of issue.wcagCriteria) {
+        criteriaWithExistingIssues.add(criterion);
+      }
+    }
+
+    // Create a map for quick lookup of existing verifications
+    const existingMap = new Map<string, string>();
+    for (const existing of existingVerifications) {
+      existingMap.set(existing.criterionId, existing.status);
+    }
+
+    // Step 2: Separate verifications into new (create) and updates
+    // AI verifications always take precedence over axe-core verifications
+    const toCreate: Array<{
+      scanResultId: string;
+      criterionId: string;
+      status: string;
+      scanner: string;
+      confidence: number | null;
+      reasoning: string | null;
+    }> = [];
+
+    const toUpdate: Array<{
+      criterionId: string;
+      status: string;
+      scanner: string;
+      confidence: number | null;
+      reasoning: string | null;
+    }> = [];
+
+    for (const verification of criteriaVerifications) {
+      const status = verification.status;
+      const isAiStatus = status === 'AI_VERIFIED_PASS' || status === 'AI_VERIFIED_FAIL';
+
+      // Determine scanner name based on status and existing state
+      let scanner: string;
+      const existingStatus = existingMap.get(verification.criterionId);
+
+      if (isAiStatus) {
+        // If there was an existing axe-core verification, mark as combined
+        if (existingStatus === 'PASS' || existingStatus === 'FAIL') {
+          scanner = 'axe-core + AI';
+        } else {
+          scanner = defaultAiModel;
+        }
+      } else if (status === 'NOT_TESTED') {
+        scanner = 'N/A';
+      } else {
+        scanner = 'axe-core';
+      }
+
+      const verificationData = {
+        criterionId: verification.criterionId,
+        status,
+        scanner,
+        confidence: verification.confidence ?? null,
+        reasoning: verification.reasoning ?? null,
+      };
+
+      if (existingMap.has(verification.criterionId)) {
+        // Existing verification - check if AI should take precedence
+        const existing = existingStatus;
+
+        // AI verifications (AI_VERIFIED_PASS, AI_VERIFIED_FAIL) take precedence over axe-core (PASS, FAIL)
+        // and over NOT_TESTED
+        const shouldUpdate =
+          isAiStatus || // AI always updates
+          existing === 'NOT_TESTED' || // Any verification updates NOT_TESTED
+          (status === 'FAIL' && existing === 'PASS'); // FAIL overrides PASS (issue found)
+
+        if (shouldUpdate) {
+          toUpdate.push(verificationData);
+        }
+        // Skip if existing AI verification shouldn't be overwritten by non-AI
+      } else {
+        // New verification - will be created
+        toCreate.push({
+          scanResultId,
+          ...verificationData,
+        });
+      }
+    }
+
+    let storedCount = 0;
+
+    // Step 3: Batch create new verifications using createMany for efficiency
+    if (toCreate.length > 0) {
+      const createResult = await tx.criteriaVerification.createMany({
+        data: toCreate,
+        skipDuplicates: true, // Handle any race conditions gracefully
+      });
+      storedCount += createResult.count;
+
+      console.log(
+        `✅ AI Queue Service: Batch created ${createResult.count} new criteria verifications for scan ${scanId}`
+      );
+    }
+
+    // Step 4: Update existing verifications where AI takes precedence
+    // Must be done individually since each update has different data
+    if (toUpdate.length > 0) {
+      let updateCount = 0;
+
+      for (const update of toUpdate) {
+        try {
+          await tx.criteriaVerification.update({
+            where: {
+              scanResultId_criterionId: {
+                scanResultId,
+                criterionId: update.criterionId,
+              },
+            },
+            data: {
+              status: update.status,
+              scanner: update.scanner,
+              confidence: update.confidence,
+              reasoning: update.reasoning,
+            },
+          });
+          updateCount++;
+        } catch (updateError) {
+          // Log individual update failure but continue with others
+          const err = updateError instanceof Error ? updateError : new Error(String(updateError));
+          console.warn(
+            `⚠️ AI Queue Service: Failed to update verification for criterion ${update.criterionId}:`,
+            err.message
+          );
+        }
+      }
+
+      storedCount += updateCount;
+      console.log(
+        `✅ AI Queue Service: Updated ${updateCount}/${toUpdate.length} existing criteria verifications for scan ${scanId}`
+      );
+    }
+
+    // Step 5: Create Issue records for AI_VERIFIED_FAIL criteria without existing issues
+    // This makes AI-detected failures visible in the Issues tab
+    const aiFailVerifications = criteriaVerifications.filter(
+      (v) => v.status === 'AI_VERIFIED_FAIL' && !criteriaWithExistingIssues.has(v.criterionId)
+    );
+
+    const createdIssues: Array<{ id: string; impact: string; criterionId: string }> = [];
+    const issueCounts = { critical: 0, serious: 0, moderate: 0, minor: 0 };
+
+    if (aiFailVerifications.length > 0) {
+      console.log(
+        `ℹ️ AI Queue Service: Creating ${aiFailVerifications.length} issues for AI-detected failures without existing issues`
+      );
+
+      for (const verification of aiFailVerifications) {
+        const issue = await createIssueFromAiVerification(
+          tx,
+          scanResultId,
+          verification,
+          defaultAiModel
+        );
+
+        if (issue) {
+          createdIssues.push({ ...issue, criterionId: verification.criterionId });
+
+          // Track issue counts by impact
+          switch (issue.impact) {
+            case 'CRITICAL':
+              issueCounts.critical++;
+              break;
+            case 'SERIOUS':
+              issueCounts.serious++;
+              break;
+            case 'MODERATE':
+              issueCounts.moderate++;
+              break;
+            case 'MINOR':
+              issueCounts.minor++;
+              break;
+          }
+        }
+      }
+
+      if (createdIssues.length > 0) {
+        console.log(
+          `✅ AI Queue Service: Created ${createdIssues.length} AI-detected issues for scan ${scanId}`
+        );
+      }
+    }
+
+    // Step 6: Link created issues to their criteria verifications
+    if (createdIssues.length > 0) {
+      for (const { id: issueId, criterionId } of createdIssues) {
+        try {
+          // Update the criteria verification to link it to the created issue
+          await tx.criteriaVerification.update({
+            where: {
+              scanResultId_criterionId: {
+                scanResultId,
+                criterionId,
+              },
+            },
+            data: {
+              issues: {
+                connect: { id: issueId },
+              },
+            },
+          });
+        } catch (linkError) {
+          const err = linkError instanceof Error ? linkError : new Error(String(linkError));
+          console.warn(
+            `⚠️ AI Queue Service: Failed to link issue ${issueId} to criterion ${criterionId}:`,
+            err.message
+          );
+        }
+      }
+    }
+
+    // Step 7: Update ScanResult issue counts if new issues were created
+    if (createdIssues.length > 0) {
+      // Get current counts to increment them
+      const currentResult = await tx.scanResult.findUnique({
+        where: { id: scanResultId },
+        select: {
+          totalIssues: true,
+          criticalCount: true,
+          seriousCount: true,
+          moderateCount: true,
+          minorCount: true,
+        },
+      });
+
+      if (currentResult) {
+        await tx.scanResult.update({
+          where: { id: scanResultId },
+          data: {
+            totalIssues: currentResult.totalIssues + createdIssues.length,
+            criticalCount: currentResult.criticalCount + issueCounts.critical,
+            seriousCount: currentResult.seriousCount + issueCounts.serious,
+            moderateCount: currentResult.moderateCount + issueCounts.moderate,
+            minorCount: currentResult.minorCount + issueCounts.minor,
+          },
+        });
+
+        console.log(
+          `✅ AI Queue Service: Updated ScanResult issue counts (+${createdIssues.length} total issues) for scan ${scanId}`
+        );
+      }
+    }
+
+    // Step 8: Recalculate coverage statistics after storing all verifications
+    // This ensures the scan's coverage stats reflect the AI verifications
+    await recalculateCoverageStats(tx, scanId, scanResultId, wcagLevel);
+
+    console.log(
+      `✅ AI Queue Service: Stored ${storedCount}/${criteriaVerifications.length} criteria verifications for scan ${scanId}`
+    );
+
+    return storedCount;
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error(
+      `❌ AI Queue Service: Failed to store criteria verifications for scan ${scanId}:`,
+      err.message
+    );
+    throw err;
+  }
+}
+
+/**
+ * Recalculate and update coverage statistics for a scan
+ *
+ * Computes criteriaChecked and coveragePercentage from stored CriteriaVerification records.
+ * Called after storing AI verifications to update the scan's coverage stats.
+ *
+ * Requirements:
+ * - REQ-6.1: Recalculate criteriaChecked count and coveragePercentage
+ *
+ * @param tx - Prisma transaction client
+ * @param scanId - UUID of the scan
+ * @param scanResultId - UUID of the scan result
+ * @param wcagLevel - WCAG conformance level (A, AA, AAA)
+ */
+async function recalculateCoverageStats(
+  tx: any,
+  scanId: string,
+  scanResultId: string,
+  wcagLevel: string
+): Promise<void> {
+  try {
+    // Get all verifications for this scan result
+    const verifications = await tx.criteriaVerification.findMany({
+      where: { scanResultId },
+      select: {
+        status: true,
+      },
+    });
+
+    if (verifications.length === 0) {
+      console.log(`ℹ️ AI Queue Service: No verifications to calculate coverage for scan ${scanId}`);
+      return;
+    }
+
+    // Count verifications by status
+    let passed = 0;
+    let failed = 0;
+    let aiPassed = 0;
+    let aiFailed = 0;
+    let notTested = 0;
+
+    for (const v of verifications) {
+      switch (v.status) {
+        case 'PASS':
+          passed++;
+          break;
+        case 'FAIL':
+          failed++;
+          break;
+        case 'AI_VERIFIED_PASS':
+          aiPassed++;
+          break;
+        case 'AI_VERIFIED_FAIL':
+          aiFailed++;
+          break;
+        case 'NOT_TESTED':
+          notTested++;
+          break;
+      }
+    }
+
+    // Calculate coverage metrics
+    const criteriaChecked = passed + failed + aiPassed + aiFailed;
+    const criteriaAiVerified = aiPassed + aiFailed;
+
+    // Get total criteria for WCAG level (this is informational, stored in frontend constants)
+    // For now, we log the statistics
+    const isAiEnhanced = criteriaAiVerified > 0;
+    const totalCriteria = verifications.length; // Use actual count since we store all criteria
+    const coveragePercentage = totalCriteria > 0
+      ? Math.round((criteriaChecked / totalCriteria) * 100)
+      : 0;
+
+    console.log(
+      `✅ AI Queue Service: Coverage stats for scan ${scanId}: ` +
+      `${criteriaChecked}/${totalCriteria} checked (${coveragePercentage}%), ` +
+      `${criteriaAiVerified} AI-verified, isAiEnhanced=${isAiEnhanced}`
+    );
+
+    // Note: The actual coverage metrics are computed on-the-fly by coverage.service.ts
+    // This function ensures the verifications are stored correctly for that computation
+    // If we need to store computed stats, we could add them to the Scan or ScanResult model
+
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.warn(
+      `⚠️ AI Queue Service: Failed to recalculate coverage stats for scan ${scanId}:`,
+      err.message
+    );
+    // Don't throw - coverage calculation failure shouldn't fail the import
   }
 }
 
@@ -695,6 +1249,17 @@ export async function importAiResults(csv: string): Promise<ImportResult> {
             const aiIssues = JSON.parse(row.ai_issues_json) as AiIssueData[];
             if (aiIssues && aiIssues.length > 0) {
               await updateIssuesWithAi(tx, row.scan_id, aiIssues);
+            }
+          }
+
+          // Parse and store AI criteria verifications (optional field)
+          // Handles 50+ verifications efficiently with AI taking precedence over axe-core
+          if (row.ai_criteria_verifications_json) {
+            const criteriaVerifications = JSON.parse(
+              row.ai_criteria_verifications_json
+            ) as AiCriteriaVerificationData[];
+            if (criteriaVerifications && criteriaVerifications.length > 0) {
+              await storeCriteriaVerifications(tx, row.scan_id, criteriaVerifications, row.ai_model);
             }
           }
         });

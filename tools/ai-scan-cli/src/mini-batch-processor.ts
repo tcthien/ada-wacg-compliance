@@ -1,4 +1,4 @@
-import type { ScanResult, ExistingIssue } from './types.js';
+import type { ScanResult, ExistingIssue, WcagLevel } from './types.js';
 import { ErrorType } from './types.js';
 import type { Logger } from './logger.js';
 import type { MiniBatch, Batch } from './batch-organizer.js';
@@ -7,6 +7,7 @@ import { invokeClaudeCode } from './claude-invoker.js';
 import { parseClaudeOutput } from './result-parser.js';
 import type { CheckpointManager } from './checkpoint-manager.js';
 import { WebsiteDownloader, type DownloadedSite } from './website-downloader.js';
+import { CriteriaBatchProcessor } from './criteria-batch-processor.js';
 
 /**
  * Extended DownloadedSite with existing issues from the input CSV
@@ -14,6 +15,18 @@ import { WebsiteDownloader, type DownloadedSite } from './website-downloader.js'
 interface DownloadedSiteWithIssues extends DownloadedSite {
   /** Existing issues from axe-core scan to be enhanced */
   existingIssues?: ExistingIssue[];
+}
+
+/**
+ * Token usage breakdown for a scan
+ */
+export interface TokenUsageBreakdown {
+  /** Tokens used for issue enhancement */
+  issueEnhancement: number;
+  /** Tokens used for criteria verification */
+  criteriaVerification: number;
+  /** Total tokens used */
+  total: number;
 }
 
 /**
@@ -48,6 +61,78 @@ export interface MiniBatchProcessorOptions {
    * Optional callback for progress updates
    */
   onProgress?: (progress: ProcessingProgress) => void;
+
+  // ============================================
+  // Criteria Verification Options
+  // ============================================
+
+  /**
+   * Enable WCAG criteria verification after issue scanning.
+   * When enabled, the processor will verify which WCAG criteria
+   * pass/fail/cannot-be-determined for each scanned page.
+   * @default true
+   */
+  enableCriteriaVerification?: boolean;
+
+  /**
+   * Skip criteria verification even if enabled.
+   * Useful for quick scans that don't need full compliance reporting.
+   * Takes precedence over enableCriteriaVerification.
+   * @default false
+   */
+  skipCriteriaVerification?: boolean;
+
+  /**
+   * Number of WCAG criteria to verify per AI batch call.
+   * Smaller batches are more accurate but slower.
+   * @default 10
+   */
+  criteriaBatchSize?: number;
+
+  // ============================================
+  // Cache Options
+  // ============================================
+
+  /**
+   * Enable caching of criteria verification results.
+   * Cached results are reused for pages with identical content hashes.
+   * @default true
+   */
+  useCache?: boolean;
+
+  /**
+   * Directory for storing criteria verification cache files.
+   * Relative paths are resolved from the current working directory.
+   * @default '.ai-scan-cache/'
+   */
+  cacheDir?: string;
+
+  /**
+   * Time-to-live for cached criteria verification results in days.
+   * Cached results older than this will be refreshed.
+   * @default 7
+   */
+  cacheTtlDays?: number;
+
+  // ============================================
+  // Checkpoint Options
+  // ============================================
+
+  /**
+   * Directory for storing checkpoint files.
+   * Checkpoints allow resuming interrupted scans.
+   * Relative paths are resolved from the current working directory.
+   * @default '.ai-scan-checkpoints/'
+   */
+  checkpointDir?: string;
+
+  /**
+   * Automatically resume from existing checkpoint if found.
+   * When true, the processor checks for existing checkpoint files
+   * and continues from where it left off.
+   * @default true
+   */
+  resumeFromCheckpoint?: boolean;
 }
 
 /**
@@ -134,6 +219,8 @@ export class MiniBatchProcessor {
   };
   private checkpointManager: CheckpointManager | null = null;
   private downloader: WebsiteDownloader;
+  private criteriaBatchProcessor: CriteriaBatchProcessor | null = null;
+  private criteriaBatchProcessorInitialized: boolean = false;
 
   /**
    * Creates a new MiniBatchProcessor instance
@@ -151,11 +238,26 @@ export class MiniBatchProcessor {
 
     // Set defaults for all options
     this.options = {
+      // Core processing options
       delay: options.delay ?? 5,
       timeout: options.timeout ?? 180000,
       retries: options.retries ?? 3,
       verbose: options.verbose ?? false,
       onProgress: options.onProgress,
+
+      // Criteria verification options
+      enableCriteriaVerification: options.enableCriteriaVerification ?? true,
+      skipCriteriaVerification: options.skipCriteriaVerification ?? false,
+      criteriaBatchSize: options.criteriaBatchSize ?? 10,
+
+      // Cache options
+      useCache: options.useCache ?? true,
+      cacheDir: options.cacheDir ?? '.ai-scan-cache/',
+      cacheTtlDays: options.cacheTtlDays ?? 7,
+
+      // Checkpoint options
+      checkpointDir: options.checkpointDir ?? '.ai-scan-checkpoints/',
+      resumeFromCheckpoint: options.resumeFromCheckpoint ?? true,
     };
 
     this.checkpointManager = checkpointManager || null;
@@ -169,13 +271,30 @@ export class MiniBatchProcessor {
       headless: true,
       logger: this.logger,
     });
+
+    // Initialize criteria batch processor if criteria verification is enabled
+    if (this.options.enableCriteriaVerification && !this.options.skipCriteriaVerification) {
+      this.criteriaBatchProcessor = new CriteriaBatchProcessor(this.logger, {
+        batchSize: this.options.criteriaBatchSize,
+        delayBetweenBatches: 2000, // 2 seconds between criteria batches
+        timeout: this.options.timeout,
+      });
+    }
   }
 
   /**
-   * Initialize the processor (starts browser)
+   * Initialize the processor (starts browser and criteria processor)
    */
   async initialize(): Promise<void> {
     await this.downloader.initialize();
+
+    // Initialize criteria batch processor if enabled and not already initialized
+    if (this.criteriaBatchProcessor && !this.criteriaBatchProcessorInitialized) {
+      this.logger.info('Initializing criteria batch processor...');
+      await this.criteriaBatchProcessor.initialize();
+      this.criteriaBatchProcessorInitialized = true;
+      this.logger.info('Criteria batch processor initialized');
+    }
   }
 
   /**
@@ -351,7 +470,14 @@ export class MiniBatchProcessor {
           // Add duration from invocation
           scanResult.durationMs = invocationResult.durationMs;
           this.logger.success(`Successfully analyzed ${site.url}`);
-          return scanResult;
+
+          // Perform criteria verification if enabled
+          const enhancedResult = await this.performCriteriaVerification(
+            scanResult,
+            site,
+            invocationResult.durationMs || 0
+          );
+          return enhancedResult;
         } else if (parsedResults.length > 0) {
           // Use the first result if scanId doesn't match (Claude might not include it)
           const result = parsedResults[0];
@@ -359,7 +485,14 @@ export class MiniBatchProcessor {
           result.url = site.url;
           result.durationMs = invocationResult.durationMs;
           this.logger.success(`Successfully analyzed ${site.url}`);
-          return result;
+
+          // Perform criteria verification if enabled
+          const enhancedResult = await this.performCriteriaVerification(
+            result,
+            site,
+            invocationResult.durationMs || 0
+          );
+          return enhancedResult;
         } else {
           if (retryCount < this.options.retries) {
             this.logger.warning(
@@ -424,6 +557,88 @@ export class MiniBatchProcessor {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Perform criteria verification for a scan result
+   *
+   * This method adds WCAG criteria verification to an existing scan result.
+   * It checks which WCAG criteria pass/fail/cannot-be-determined based on
+   * the downloaded site content and existing issues.
+   *
+   * @param scanResult - The scan result from issue enhancement/analysis
+   * @param site - The downloaded site with content and existing issues
+   * @param issueEnhancementDurationMs - Duration of the issue enhancement phase
+   * @returns Enhanced ScanResult with criteriaVerifications
+   */
+  private async performCriteriaVerification(
+    scanResult: ScanResult,
+    site: DownloadedSiteWithIssues,
+    issueEnhancementDurationMs: number
+  ): Promise<ScanResult> {
+    // Check if criteria verification should be skipped
+    if (!this.criteriaBatchProcessor || !this.criteriaBatchProcessorInitialized) {
+      return scanResult;
+    }
+
+    // Determine WCAG level - use site's wcagLevel (already set from PendingScan), fallback to scanResult or default to 'AA'
+    // Cast to WcagLevel since DownloadedSite stores it as string
+    const wcagLevel: WcagLevel = (site.wcagLevel as WcagLevel) || scanResult.wcagLevel || 'AA';
+
+    // Get existing issues for the criteria verification context
+    const existingIssues = site.existingIssues || [];
+
+    this.logger.info(`Starting criteria verification for ${site.url} at WCAG Level ${wcagLevel}...`);
+
+    try {
+      // Process criteria verification batches
+      const criteriaResults = await this.criteriaBatchProcessor.processCriteriaBatches(
+        site,
+        existingIssues,
+        wcagLevel
+      );
+
+      // Extract verifications from batch results
+      const criteriaVerifications = criteriaResults.flatMap((r) => r.verifications);
+
+      // Calculate token usage for criteria verification
+      const criteriaTokens = criteriaResults.reduce((sum, r) => sum + r.tokensUsed, 0);
+
+      // Calculate total criteria verification duration
+      const criteriaDurationMs = criteriaResults.reduce((sum, r) => sum + r.durationMs, 0);
+
+      // Log summary
+      const passCount = criteriaVerifications.filter((v) => v.status === 'PASS' || v.status === 'AI_VERIFIED_PASS').length;
+      const failCount = criteriaVerifications.filter((v) => v.status === 'FAIL' || v.status === 'AI_VERIFIED_FAIL').length;
+      const notTestedCount = criteriaVerifications.filter((v) => v.status === 'NOT_TESTED').length;
+
+      this.logger.success(
+        `Criteria verification complete: ${criteriaVerifications.length} criteria ` +
+          `(${passCount} pass, ${failCount} fail, ${notTestedCount} not tested)`
+      );
+      this.logger.debug(
+        `Criteria verification used ${criteriaTokens} tokens in ${criteriaDurationMs}ms`
+      );
+
+      // Merge criteriaVerifications into scan result
+      scanResult.criteriaVerifications = criteriaVerifications;
+
+      // Update total duration to include criteria verification
+      scanResult.durationMs = issueEnhancementDurationMs + criteriaDurationMs;
+
+      // Track tokens used (criteria tokens + any existing tokens from issue enhancement)
+      scanResult.tokensUsed = (scanResult.tokensUsed ?? 0) + criteriaTokens;
+
+      return scanResult;
+    } catch (error) {
+      // Criteria verification failure should not fail the entire scan
+      // Log the error and return the original scan result without criteria verifications
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Criteria verification failed for ${site.url}: ${errorMessage}`);
+      this.logger.warning('Continuing without criteria verifications');
+
+      return scanResult;
+    }
   }
 
   /**

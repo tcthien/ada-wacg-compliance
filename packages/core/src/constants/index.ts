@@ -9,9 +9,13 @@
 export {
   WCAG_CRITERIA,
   AXE_RULE_TO_WCAG,
+  UNTESTABLE_CRITERIA,
   getCriteriaByLevel,
   getCriteriaUpToLevel,
   getWCAGForAxeRule,
+  getUntestableCriteria,
+  getTestableCriteria,
+  getAxeCoveredCriteria,
   type WCAGLevel,
   type WCAGCriterion
 } from './wcag.constants.js';

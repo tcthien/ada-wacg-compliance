@@ -31,6 +31,7 @@ import {
   listAiScans,
   updateScanWithAiResults,
   updateIssuesWithAi,
+  storeCriteriaVerifications,
   AiQueueServiceError,
 } from './ai-queue.service.js';
 import { getPrismaClient } from '../../config/database.js';
@@ -272,13 +273,27 @@ describe('AI Queue Service', () => {
       expect(() => parseAndValidateCsv(invalidCsv)).toThrow(AiQueueServiceError);
     });
 
-    it('should validate tokens_used is a positive number', () => {
+    it('should validate tokens_used is a non-negative number (rejects negative)', () => {
       // Arrange - negative tokens
       const invalidCsv = `scan_id,ai_summary,ai_remediation_plan,ai_issues_json,tokens_used,ai_model,processing_time
 "scan-123","Summary","Plan","[]",-100,"claude-3-opus",45`;
 
       // Act & Assert
       expect(() => parseAndValidateCsv(invalidCsv)).toThrow(AiQueueServiceError);
+    });
+
+    it('should accept tokens_used = 0 for cached results', () => {
+      // Arrange - zero tokens (cached result scenario)
+      const testScanId = '550e8400-e29b-41d4-a716-446655440000';
+      const cachedResultCsv = `scan_id,ai_summary,ai_remediation_plan,ai_issues_json,tokens_used,ai_model,processing_time
+"${testScanId}","Summary of cached accessibility scan result.","Step 1: Fix issues from cached analysis.","[]",0,"claude-3-opus",0`;
+
+      // Act
+      const result = parseAndValidateCsv(cachedResultCsv);
+
+      // Assert
+      expect(result).toHaveLength(1);
+      expect(result[0]!.tokens_used).toBe(0);
     });
 
     it('should handle multiple rows', () => {
@@ -985,6 +1000,256 @@ describe('AI Queue Service', () => {
 
       // Assert
       expect(count).toBe(1); // Only second issue succeeded
+    });
+  });
+
+  // ============================================================================
+  // STORE CRITERIA VERIFICATIONS TESTS (Bug Fix: AI_VERIFIED_FAIL issue creation)
+  // ============================================================================
+
+  describe('storeCriteriaVerifications', () => {
+    it('should create Issue records for AI_VERIFIED_FAIL criteria without existing issues', async () => {
+      // Arrange
+      const mockTx = {
+        scan: {
+          findUnique: vi.fn().mockResolvedValue({
+            wcagLevel: 'AA',
+            scanResult: { id: 'result-123' },
+          }),
+        },
+        criteriaVerification: {
+          findMany: vi.fn().mockResolvedValue([]),
+          createMany: vi.fn().mockResolvedValue({ count: 2 }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        issue: {
+          findMany: vi.fn().mockResolvedValue([]), // No existing issues
+          create: vi.fn().mockResolvedValue({ id: 'new-issue-1', impact: 'SERIOUS' }),
+        },
+        scanResult: {
+          findUnique: vi.fn().mockResolvedValue({
+            totalIssues: 0,
+            criticalCount: 0,
+            seriousCount: 0,
+            moderateCount: 0,
+            minorCount: 0,
+          }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+      };
+
+      const verifications = [
+        {
+          criterionId: '2.4.1',
+          status: 'AI_VERIFIED_FAIL' as const,
+          confidence: 85,
+          reasoning: 'Page lacks skip navigation links',
+        },
+        {
+          criterionId: '3.1.1',
+          status: 'AI_VERIFIED_PASS' as const,
+          confidence: 95,
+          reasoning: 'HTML has valid lang attribute',
+        },
+      ];
+
+      // Act
+      const count = await storeCriteriaVerifications(mockTx, 'scan-123', verifications);
+
+      // Assert
+      expect(count).toBe(2);
+      // Should create an issue for AI_VERIFIED_FAIL
+      expect(mockTx.issue.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            scanResultId: 'result-123',
+            ruleId: 'ai-wcag-2.4.1',
+            wcagCriteria: ['2.4.1'],
+            description: expect.stringContaining('[AI-Detected]'),
+            aiExplanation: 'Page lacks skip navigation links',
+          }),
+        })
+      );
+      // Should update ScanResult counts
+      expect(mockTx.scanResult.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'result-123' },
+          data: expect.objectContaining({
+            totalIssues: 1,
+          }),
+        })
+      );
+    });
+
+    it('should NOT create Issue for AI_VERIFIED_FAIL if criterion already has existing issues', async () => {
+      // Arrange
+      const mockTx = {
+        scan: {
+          findUnique: vi.fn().mockResolvedValue({
+            wcagLevel: 'AA',
+            scanResult: { id: 'result-123' },
+          }),
+        },
+        criteriaVerification: {
+          findMany: vi.fn().mockResolvedValue([]),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        issue: {
+          findMany: vi.fn().mockResolvedValue([
+            // Existing issue for criterion 2.4.1
+            { id: 'existing-issue', wcagCriteria: ['2.4.1'] },
+          ]),
+          create: vi.fn().mockResolvedValue({ id: 'new-issue-1', impact: 'SERIOUS' }),
+        },
+        scanResult: {
+          findUnique: vi.fn(),
+          update: vi.fn(),
+        },
+      };
+
+      const verifications = [
+        {
+          criterionId: '2.4.1',
+          status: 'AI_VERIFIED_FAIL' as const,
+          confidence: 85,
+          reasoning: 'Page lacks skip navigation links',
+        },
+      ];
+
+      // Act
+      await storeCriteriaVerifications(mockTx, 'scan-123', verifications);
+
+      // Assert - No issue should be created since 2.4.1 already has an issue
+      expect(mockTx.issue.create).not.toHaveBeenCalled();
+      expect(mockTx.scanResult.update).not.toHaveBeenCalled();
+    });
+
+    it('should link created issues to their criteria verifications', async () => {
+      // Arrange
+      const mockTx = {
+        scan: {
+          findUnique: vi.fn().mockResolvedValue({
+            wcagLevel: 'AA',
+            scanResult: { id: 'result-123' },
+          }),
+        },
+        criteriaVerification: {
+          findMany: vi.fn().mockResolvedValue([]),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        issue: {
+          findMany: vi.fn().mockResolvedValue([]),
+          create: vi.fn().mockResolvedValue({ id: 'new-issue-1', impact: 'SERIOUS' }),
+        },
+        scanResult: {
+          findUnique: vi.fn().mockResolvedValue({
+            totalIssues: 0,
+            criticalCount: 0,
+            seriousCount: 0,
+            moderateCount: 0,
+            minorCount: 0,
+          }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+      };
+
+      const verifications = [
+        {
+          criterionId: '2.4.2',
+          status: 'AI_VERIFIED_FAIL' as const,
+          confidence: 90,
+          reasoning: 'Page has empty title element',
+        },
+      ];
+
+      // Act
+      await storeCriteriaVerifications(mockTx, 'scan-123', verifications);
+
+      // Assert - Should link issue to verification
+      expect(mockTx.criteriaVerification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            scanResultId_criterionId: {
+              scanResultId: 'result-123',
+              criterionId: '2.4.2',
+            },
+          },
+          data: {
+            issues: {
+              connect: { id: 'new-issue-1' },
+            },
+          },
+        })
+      );
+    });
+
+    it('should map confidence to correct impact level', async () => {
+      // Arrange
+      const createCalls: any[] = [];
+      const mockTx = {
+        scan: {
+          findUnique: vi.fn().mockResolvedValue({
+            wcagLevel: 'AA',
+            scanResult: { id: 'result-123' },
+          }),
+        },
+        criteriaVerification: {
+          findMany: vi.fn().mockResolvedValue([]),
+          createMany: vi.fn().mockResolvedValue({ count: 4 }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        issue: {
+          findMany: vi.fn().mockResolvedValue([]),
+          create: vi.fn().mockImplementation((args) => {
+            createCalls.push(args);
+            return { id: `issue-${createCalls.length}`, impact: args.data.impact };
+          }),
+        },
+        scanResult: {
+          findUnique: vi.fn().mockResolvedValue({
+            totalIssues: 0,
+            criticalCount: 0,
+            seriousCount: 0,
+            moderateCount: 0,
+            minorCount: 0,
+          }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+      };
+
+      const verifications = [
+        { criterionId: '1.1.1', status: 'AI_VERIFIED_FAIL' as const, confidence: 95, reasoning: 'Reason 1' },
+        { criterionId: '1.3.1', status: 'AI_VERIFIED_FAIL' as const, confidence: 75, reasoning: 'Reason 2' },
+        { criterionId: '2.1.1', status: 'AI_VERIFIED_FAIL' as const, confidence: 55, reasoning: 'Reason 3' },
+        { criterionId: '3.2.1', status: 'AI_VERIFIED_FAIL' as const, confidence: 35, reasoning: 'Reason 4' },
+      ];
+
+      // Act
+      await storeCriteriaVerifications(mockTx, 'scan-123', verifications);
+
+      // Assert - Check impact levels based on confidence
+      expect(createCalls[0].data.impact).toBe('CRITICAL');  // 95 >= 90
+      expect(createCalls[1].data.impact).toBe('SERIOUS');   // 75 >= 70
+      expect(createCalls[2].data.impact).toBe('MODERATE');  // 55 >= 50
+      expect(createCalls[3].data.impact).toBe('MINOR');     // 35 < 50
+    });
+
+    it('should return 0 for empty verifications array', async () => {
+      // Arrange
+      const mockTx = {
+        scan: {
+          findUnique: vi.fn(),
+        },
+      };
+
+      // Act
+      const count = await storeCriteriaVerifications(mockTx, 'scan-123', []);
+
+      // Assert
+      expect(count).toBe(0);
+      expect(mockTx.scan.findUnique).not.toHaveBeenCalled();
     });
   });
 });
